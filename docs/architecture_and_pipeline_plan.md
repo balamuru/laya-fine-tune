@@ -69,36 +69,32 @@ To ensure resilience against micro-outages and to enable efficient batching, the
 
 ## 4. Infrastructure & Docker Deployment Strategy
 
-The pipeline is provisioned as composable Docker applications using a unified `docker-compose.yml` that wraps both our custom pipeline workers and the official Laya inference server. All tunable parameters are isolated in a `.env` file.
+The pipeline is provisioned as a fully self-contained Docker Compose application. The `docker-compose.yml` natively embeds the Laya inference server alongside the NATS broker and our Python workers. All tunable parameters are isolated in the `.env` file.
 
 ### Composable Services
 1. **`nats`**: The NATS server running with JetStream enabled (`-js`).
-2. **`laya-serve`**: The Laya HTTP REST API service. We will wrap the existing configuration found in `/home/vinayb/apps/laya/docker-compose/docker-compose.yml` (using the `vinaybalamuru/laya:cuda` image and mapping the local model cache volume) into our project's compose file.
+2. **`laya-serve`**: The Laya HTTP REST API service natively embedded into our compose stack (using `vinaybalamuru/laya:cuda` and mapping the external `laya_model-cache` volume).
 3. **`ingest`**: The Python application running the WebSocket consumer and Tier 1 filter.
 4. **`inference`**: The Python application pulling from JetStream, calling `laya-serve`, and publishing results.
 5. **`analytics`**: (Phase 3) The ClickHouse database and Grafana layer.
 
 ### Environment Configuration (`.env`)
-All services rely on the `.env` file for topology and limits. This includes the Laya runtime configurations imported from the official repository:
+The self-contained `.env` file manages both pipeline configs and the Laya runtime configurations:
 ```env
-# NATS JetStream Configuration
+# Pipeline Infrastructure
 NATS_URL=nats://nats:4222
 JETSTREAM_RAW_SUBJECT=stream.raw
 JETSTREAM_ENRICHED_SUBJECT=stream.enriched
-JETSTREAM_TTL=60s             # Drop data older than 60 seconds
-JETSTREAM_MAX_MSGS=10000      # Ring buffer limit
 
-# Laya Inference Server Configuration (Wrapped)
-LAYA_PORT=8111
+# Laya Inference Server Settings
+LAYA_SERVE_URL=http://laya-serve:8111
+LAYA_BATCH_SIZE=32
+LAYA_IMAGE=vinaybalamuru/laya:cuda
 LAYA_DEVICE=cuda
 LAYA_CUDA_AMP=fp16
-LAYA_BATCH_SIZE=32
-LAYA_SERVE_URL=http://laya-serve:8111
 
 # Ingestion Target
 JETSTREAM_WS_URL=wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.feed.post
-
-# Stage 2 Sieve Configuration
 SIEVE_ROOT_POSTS_ONLY=true
 ```
 
@@ -172,3 +168,16 @@ This project is structured as a capstone, moving from raw ingestion to a flexibl
 *   **Evaluations (Evals):**
     *   **Eval 4.1:** Inject a synthetic "perfect storm" message into NATS. Verify it triggers the specific escalation consumer.
     *   **Eval 4.2:** Check the empty LangGraph placeholder block to ensure the payload arrives fully structured and ready for future heavy LLM processing.
+
+### Phase 5: Active Learning & Distillation Loop (The Feedback)
+**Goal:** Establish a pipeline to collect high-value "edge case" data, label it using a frontier model (Gemini/Claude), and build a dataset for fine-tuning future versions of Laya.
+
+*   **Functional Requirements (FRs):**
+    *   **FR5.1:** Create a "Distillation Collector" Python worker that subscribes to `stream.enriched`.
+    *   **FR5.2:** Implement intelligent sampling strategies (e.g., capture posts where Laya's confidence score is between 0.4 and 0.6).
+    *   **FR5.3:** Integrate an API client to send sampled posts to a frontier LLM for "gold standard" classification.
+    *   **FR5.4:** Output the raw post and the gold label to a persistent dataset (e.g., JSONL volume or a specific ClickHouse table) for later fine-tuning.
+*   **Evaluations (Evals):**
+    *   **Eval 5.1:** Run the collector and verify it only intercepts messages matching the low-confidence heuristic.
+    *   **Eval 5.2:** Verify the frontier model API is called successfully and returns structured JSON labels.
+    *   **Eval 5.3:** Inspect the output dataset to confirm the formatting is ready for Laya fine-tuning ingestion.

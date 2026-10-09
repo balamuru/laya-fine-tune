@@ -1,0 +1,52 @@
+name: stream-analytics
+
+services:
+  nats:
+    image: nats:latest
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command: ["-js"]
+    restart: unless-stopped
+
+  laya-serve:
+    image: ${LAYA_IMAGE:-vinaybalamuru/laya:cuda}
+    command: ["laya-serve"]
+    ports:
+      - "${LAYA_BIND_ADDRESS:-0.0.0.0}:${LAYA_PORT:-8111}:${LAYA_PORT:-8111}"
+    environment:
+      LAYA_HOST: "0.0.0.0"
+      LAYA_PORT: "${LAYA_PORT:-8111}"
+      LAYA_DEVICE: "${LAYA_DEVICE:-cuda}"
+      LAYA_CUDA_AMP: "${LAYA_CUDA_AMP:-fp16}"
+      LAYA_MAX_LOADED: "${LAYA_MAX_LOADED:-1}"
+      LAYA_MODELS: "${LAYA_MODELS:-english}"
+      LAYA_PRELOAD: "${LAYA_PRELOAD:-1}"
+      LAYA_API_KEY: "${LAYA_API_KEY:-}"
+      OMP_NUM_THREADS: "${OMP_NUM_THREADS:-4}"
+      HF_HUB_OFFLINE: "${HF_HUB_OFFLINE:-0}"
+      HF_TOKEN: "${HF_TOKEN:-}"
+    volumes:
+      - model-cache:/home/laya/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${LAYA_GPU_ID:-0}"]
+              capabilities: [gpu]
+    restart: unless-stopped
+    init: true
+
+  ingest:
+    build:
+      context: .
+      dockerfile: Dockerfile.ingest
+    env_file: .env
+    depends_on:
+      - nats
+    restart: unless-stopped
+
+volumes:
+  model-cache:
+    name: "laya_finetune_cache"
