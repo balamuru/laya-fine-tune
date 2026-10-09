@@ -22,10 +22,8 @@ This project connects to public, unauthenticated real-time WebSocket feeds to de
 ├── main.py             # Stream consumer & runtime coordinator
 ├── stream_analytics.py # StreamAnalytics processor & window aggregations
 ├── docs/
-│   ├── proposals.md                     # Proposals for stream analytics & Laya System 1
-│   ├── decisions.md                     # ADR for serving Laya via HTTP
-│   └── filtering_and_analytics_pipeline.md # 4-Tier prefiltering & Laya decision schema
-└── .venv/                               # Python virtual environment
+│   └── architecture_and_pipeline_plan.md # Master architecture, ADR, & pipeline specification
+└── .venv/                                # Python virtual environment
 ```
 
 ## Quick Start
