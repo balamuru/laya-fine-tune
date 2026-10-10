@@ -64,11 +64,11 @@ async def process_batch(client, messages):
             record = commit.get("record", {})
             laya = payload.get("laya", {})
             
-            # Map Laya output format (assuming choice/score/noul types output values)
-            category = laya.get("category", {}).get("value", "unknown")
-            sentiment = laya.get("sentiment", {}).get("value", "unknown")
-            virality = float(laya.get("virality", {}).get("value", 0.0))
-            is_breaking = float(laya.get("is_breaking_claim", {}).get("value", 0.0))
+            # Map Laya output format (System One API uses choice/score keys)
+            category = laya.get("category", {}).get("choice", "unknown")
+            sentiment = laya.get("sentiment", {}).get("choice", "unknown")
+            virality = float(laya.get("virality", {}).get("score", 0.0))
+            is_breaking = float(laya.get("is_breaking_claim", {}).get("prob", 0.0))
             
             from datetime import datetime, timezone
             
