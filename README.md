@@ -20,7 +20,11 @@ This project is built using a composable Docker-based architecture with NATS Jet
 ## Quick Start
 
 ### 1. Configuration
-The entire pipeline is controlled via the `.env` file. A default `.env` is provided. If you plan to use the Active Learning distillation loop, add your Gemini API key:
+The entire pipeline is controlled via the `.env` file. A template `.env.example` is provided:
+```bash
+cp .env.example .env
+```
+If you plan to use the Active Learning distillation loop, add your Gemini API key:
 ```env
 GEMINI_API_KEY=your_key_here
 ```

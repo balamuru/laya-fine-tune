@@ -1,0 +1,123 @@
+{
+  "title": "Bluesky Live Stream Analytics",
+  "uid": "bluesky_stream_01",
+  "refresh": "5s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Posts by Category (Live)",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "PDEE91DDB90597936"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT toStartOfInterval(created_at, INTERVAL 10 SECOND) AS time, category, count(*) as count FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) GROUP BY time, category ORDER BY time",
+          "format": 1,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Posts by Sentiment (Live)",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "PDEE91DDB90597936"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT toStartOfInterval(created_at, INTERVAL 10 SECOND) AS time, sentiment, count(*) as count FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) GROUP BY time, sentiment ORDER BY time",
+          "format": 1,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Total Posts Processed",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "PDEE91DDB90597936"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) FROM bluesky.enriched_posts",
+          "format": 0,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "gauge",
+      "title": "Average Virality Score",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "PDEE91DDB90597936"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 1
+        }
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT avg(virality) FROM bluesky.enriched_posts WHERE $__timeFilter(created_at)",
+          "format": 0,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Latest Breaking Claims (is_breaking_claim > 0.5)",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "PDEE91DDB90597936"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT toString(created_at) AS timestamp, text, category, sentiment, is_breaking_claim, virality FROM bluesky.enriched_posts ORDER BY created_at DESC LIMIT 25",
+          "format": 0,
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "version": 3
+}
