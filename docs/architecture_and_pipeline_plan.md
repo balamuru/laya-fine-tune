@@ -87,8 +87,8 @@ JETSTREAM_RAW_SUBJECT=stream.raw
 JETSTREAM_ENRICHED_SUBJECT=stream.enriched
 
 # Laya Inference Server Settings
-LAYA_SERVE_URL=http://laya-serve:8111
-LAYA_BATCH_SIZE=32
+SYSTEM_ONE_URL=http://laya-serve:8111
+SYSTEM_ONE_BATCH_SIZE=32
 LAYA_IMAGE=vinaybalamuru/laya:cuda
 LAYA_DEVICE=cuda
 LAYA_CUDA_AMP=fp16

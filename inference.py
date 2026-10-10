@@ -16,9 +16,9 @@ load_dotenv()
 NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
 RAW_SUBJECT = os.getenv("JETSTREAM_RAW_SUBJECT", "stream.raw")
 ENRICHED_SUBJECT = os.getenv("JETSTREAM_ENRICHED_SUBJECT", "stream.enriched")
-LAYA_SERVE_URL = os.getenv("LAYA_SERVE_URL", "http://localhost:8111")
-LAYA_BATCH_SIZE = int(os.getenv("LAYA_BATCH_SIZE", "32"))
-LAYA_API_KEY = os.getenv("LAYA_API_KEY", "")
+SYSTEM_ONE_URL = os.getenv("SYSTEM_ONE_URL", "http://localhost:8111")
+SYSTEM_ONE_BATCH_SIZE = int(os.getenv("SYSTEM_ONE_BATCH_SIZE", "32"))
+SYSTEM_ONE_API_KEY = os.getenv("SYSTEM_ONE_API_KEY", "")
 
 
 async def setup_nats():
@@ -83,14 +83,14 @@ async def process_batch(session, js, messages):
     }
     
     headers = {"Content-Type": "application/json"}
-    if LAYA_API_KEY:
-        headers["Authorization"] = f"Bearer {LAYA_API_KEY}"
+    if SYSTEM_ONE_API_KEY:
+        headers["Authorization"] = f"Bearer {SYSTEM_ONE_API_KEY}"
         
     payload = {"states": states, "questions": questions}
         
-    # Send micro-batch to Laya
+    # Send micro-batch to System One Model
     try:
-        async with session.post(f"{LAYA_SERVE_URL}/v1/systemone/batch", json=payload, headers=headers) as resp:
+        async with session.post(f"{SYSTEM_ONE_URL}/v1/systemone/batch", json=payload, headers=headers) as resp:
             if resp.status == 200:
                 results = await resp.json()
                 
@@ -131,13 +131,13 @@ async def run_inference(stop_event):
     print(f"Subscribing to NATS JetStream: {RAW_SUBJECT}")
     sub = await js.pull_subscribe(RAW_SUBJECT, "inference_worker", stream=stream_raw_name)
     
-    print(f"Inference worker started. Pulling batches of {LAYA_BATCH_SIZE}...")
+    print(f"Inference worker started. Pulling batches of {SYSTEM_ONE_BATCH_SIZE}...")
     
     async with aiohttp.ClientSession() as session:
         while not stop_event.is_set():
             try:
-                # Fetch up to LAYA_BATCH_SIZE messages at once
-                messages = await sub.fetch(LAYA_BATCH_SIZE, timeout=1.0)
+                # Fetch up to SYSTEM_ONE_BATCH_SIZE messages at once
+                messages = await sub.fetch(SYSTEM_ONE_BATCH_SIZE, timeout=1.0)
                 await process_batch(session, js, messages)
             except NatsTimeoutError:
                 # Normal timeout if no new messages arrived in the last 1.0 second
