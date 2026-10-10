@@ -1,52 +1,117 @@
 name: stream-analytics
-
 services:
   nats:
     image: nats:latest
     ports:
-      - "4222:4222"
-      - "8222:8222"
-    command: ["-js"]
+    - 4222:4222
+    - 8222:8222
+    command:
+    - -js
     restart: unless-stopped
-
   laya-serve:
     image: ${LAYA_IMAGE:-vinaybalamuru/laya:cuda}
-    command: ["laya-serve"]
+    command:
+    - laya-serve
     ports:
-      - "${LAYA_BIND_ADDRESS:-0.0.0.0}:${LAYA_PORT:-8111}:${LAYA_PORT:-8111}"
+    - ${LAYA_BIND_ADDRESS:-0.0.0.0}:${LAYA_PORT:-8111}:${LAYA_PORT:-8111}
     environment:
-      LAYA_HOST: "0.0.0.0"
-      LAYA_PORT: "${LAYA_PORT:-8111}"
-      LAYA_DEVICE: "${LAYA_DEVICE:-cuda}"
-      LAYA_CUDA_AMP: "${LAYA_CUDA_AMP:-fp16}"
-      LAYA_MAX_LOADED: "${LAYA_MAX_LOADED:-1}"
-      LAYA_MODELS: "${LAYA_MODELS:-english}"
-      LAYA_PRELOAD: "${LAYA_PRELOAD:-1}"
-      LAYA_API_KEY: "${LAYA_API_KEY:-}"
-      OMP_NUM_THREADS: "${OMP_NUM_THREADS:-4}"
-      HF_HUB_OFFLINE: "${HF_HUB_OFFLINE:-0}"
-      HF_TOKEN: "${HF_TOKEN:-}"
+      LAYA_HOST: 0.0.0.0
+      LAYA_PORT: ${LAYA_PORT:-8111}
+      LAYA_DEVICE: ${LAYA_DEVICE:-cuda}
+      LAYA_CUDA_AMP: ${LAYA_CUDA_AMP:-fp16}
+      LAYA_MAX_LOADED: ${LAYA_MAX_LOADED:-1}
+      LAYA_MODELS: ${LAYA_MODELS:-english}
+      LAYA_PRELOAD: ${LAYA_PRELOAD:-1}
+      LAYA_API_KEY: ${LAYA_API_KEY:-}
+      OMP_NUM_THREADS: ${OMP_NUM_THREADS:-4}
+      HF_HUB_OFFLINE: ${HF_HUB_OFFLINE:-0}
+      HF_TOKEN: ${HF_TOKEN:-}
     volumes:
-      - model-cache:/home/laya/.cache/huggingface
+    - model-cache:/home/laya/.cache/huggingface
     deploy:
       resources:
         reservations:
           devices:
-            - driver: nvidia
-              device_ids: ["${LAYA_GPU_ID:-0}"]
-              capabilities: [gpu]
+          - driver: nvidia
+            device_ids:
+            - ${LAYA_GPU_ID:-0}
+            capabilities:
+            - gpu
     restart: unless-stopped
     init: true
-
   ingest:
     build:
       context: .
       dockerfile: Dockerfile.ingest
     env_file: .env
     depends_on:
-      - nats
+    - nats
     restart: unless-stopped
-
+  inference:
+    build:
+      context: .
+      dockerfile: Dockerfile.inference
+    env_file: .env
+    depends_on:
+    - nats
+    - laya-serve
+    restart: unless-stopped
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    ports:
+    - 8123:8123
+    - 9000:9000
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DATABASE:-bluesky}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
+    restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+  sink:
+    build:
+      context: .
+      dockerfile: Dockerfile.sink
+    env_file: .env
+    depends_on:
+    - nats
+    - clickhouse
+    restart: unless-stopped
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+    - 3000:3000
+    environment:
+    - GF_SECURITY_ADMIN_PASSWORD=admin
+    - GF_INSTALL_PLUGINS=grafana-clickhouse-datasource
+    volumes:
+    - grafana_data:/var/lib/grafana
+    - ./grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+    - clickhouse
+    restart: unless-stopped
+  escalation:
+    build:
+      context: .
+      dockerfile: Dockerfile.escalation
+    env_file: .env
+    depends_on:
+    - nats
+    restart: unless-stopped
+  distillation:
+    build:
+      context: .
+      dockerfile: Dockerfile.distillation
+    env_file:
+    - .env
+    depends_on:
+    - nats
+    volumes:
+    - model-cache:/data
+    restart: unless-stopped
 volumes:
   model-cache:
-    name: "laya_finetune_cache"
+    name: laya_finetune_cache
+  grafana_data: null

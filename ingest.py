@@ -20,6 +20,7 @@ NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
 JETSTREAM_RAW_SUBJECT = os.getenv("JETSTREAM_RAW_SUBJECT", "stream.raw")
 JETSTREAM_WS_URL = os.getenv("JETSTREAM_WS_URL", "wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.feed.post")
 SIEVE_ROOT_POSTS_ONLY = os.getenv("SIEVE_ROOT_POSTS_ONLY", "true").lower() == "true"
+SIEVE_EN_ONLY = os.getenv("SIEVE_EN_ONLY", "true").lower() == "true"
 
 
 def is_root_post(record: dict) -> bool:
@@ -87,6 +88,16 @@ async def run_stream(stop_event: asyncio.Event, analytics: StreamAnalytics, nc, 
                             record = parsed_data.get("commit", {}).get("record", {})
                             if SIEVE_ROOT_POSTS_ONLY and not is_root_post(record):
                                 continue # Skip replies
+                                
+                            if SIEVE_EN_ONLY:
+                                langs = record.get("langs", [])
+                                if not langs or "en" not in langs:
+                                    continue # Skip non-English posts
+                            
+                            # Extract hashtags (FR2.2)
+                            text = record.get("text", "")
+                            hashtags = [word for word in text.split() if word.startswith("#")]
+                            record["extracted_hashtags"] = hashtags
                             
                             # Publish to NATS JetStream
                             payload = json.dumps(parsed_data).encode("utf-8")
