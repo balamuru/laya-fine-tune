@@ -54,6 +54,8 @@ def setup_clickhouse():
     try:
         client.command(f"ALTER TABLE {CH_DB}.enriched_posts ADD COLUMN IF NOT EXISTS geo_region LowCardinality(String) DEFAULT 'global_none'")
         client.command(f"ALTER TABLE {CH_DB}.enriched_posts ADD COLUMN IF NOT EXISTS primary_lang LowCardinality(String) DEFAULT 'en'")
+        client.command(f"ALTER TABLE {CH_DB}.enriched_posts ADD COLUMN IF NOT EXISTS is_nsfw Float32 DEFAULT 0.0")
+        client.command(f"ALTER TABLE {CH_DB}.enriched_posts ADD COLUMN IF NOT EXISTS cashtags Array(String)")
     except Exception as e:
         print(f"Schema migration note: {e}")
 
@@ -82,6 +84,7 @@ async def process_batch(client, messages):
             geo_region = answers.get("geo_region", {}).get("choice", "global_none")
             primary_lang = record.get("primary_lang", "en")
             is_nsfw = float(answers.get("is_nsfw", {}).get("noul", answers.get("is_nsfw", {}).get("prob", 0.0)))
+            cashtags = record.get("extracted_cashtags", [])
             
             from datetime import datetime, timezone
             
@@ -104,7 +107,8 @@ async def process_batch(client, messages):
                 is_breaking,
                 geo_region,
                 primary_lang,
-                is_nsfw
+                is_nsfw,
+                cashtags
             )
             data_rows.append(row)
         except Exception as e:
@@ -116,7 +120,7 @@ async def process_batch(client, messages):
             client.insert(f"{CH_DB}.enriched_posts", data_rows, column_names=[
                 "id", "created_at", "text", "author_did", "hashtags", 
                 "category", "sentiment", "virality", "is_breaking_claim",
-                "geo_region", "primary_lang", "is_nsfw"
+                "geo_region", "primary_lang", "is_nsfw", "cashtags"
             ])
             # ACK all if insert succeeds
             for msg in messages:

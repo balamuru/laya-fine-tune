@@ -2,7 +2,7 @@
   "title": "Bluesky Live Stream Analytics",
   "uid": "bluesky_stream_01",
   "refresh": "5s",
-  "version": 15,
+  "version": 16,
   "time": {
     "from": "now-1h",
     "to": "now"
@@ -410,6 +410,48 @@
       "targets": [
         {
           "rawSql": "SELECT toString(created_at) AS timestamp, category, geo_region, round(is_breaking_claim, 2) AS breaking_conf, round(virality, 2) AS virality, text FROM bluesky.enriched_posts WHERE is_breaking_claim >= 0.85 AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} ORDER BY created_at DESC LIMIT 25",
+          "format": 0,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "barchart",
+      "title": "Trending Stock & Crypto Cashtags ($TICKER)",
+      "gridPos": { "h": 9, "w": 10, "x": 0, "y": 44 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
+      "options": {
+        "orientation": "horizontal",
+        "xField": "cashtag",
+        "showValue": "auto",
+        "legend": { "displayMode": "hidden" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "orientation": "horizontal" }
+        }
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT cashtag, count(*) AS mentions FROM bluesky.enriched_posts ARRAY JOIN cashtags AS cashtag WHERE $__timeFilter(created_at) AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} GROUP BY cashtag ORDER BY mentions DESC LIMIT 15",
+          "format": 0,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "magnesium-wordcloud-panel",
+      "title": "Category Keyword Cloud (Deterministic Stopword Filtered)",
+      "gridPos": { "h": 9, "w": 14, "x": 10, "y": 44 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
+      "options": {
+        "wordField": "word",
+        "weightField": "freq"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT word, count(*) AS freq FROM bluesky.enriched_posts ARRAY JOIN arrayFilter(w -> length(w) >= 3 AND match(w, '^[a-z]+$') AND w NOT IN ('the', 'and', 'for', 'that', 'this', 'with', 'from', 'have', 'has', 'had', 'just', 'like', 'about', 'what', 'when', 'your', 'they', 'them', 'their', 'will', 'some', 'been', 'there', 'more', 'would', 'which', 'https', 'http', 'com', 'www', 'bsky', 'app', 'social', 'you', 'are', 'was', 'were', 'all', 'can', 'could', 'not', 'out', 'one', 'who', 'his', 'her', 'him', 'how', 'get', 'got', 'now', 'but', 'into', 'also', 'than', 'then', 'any', 'other', 'see', 'our', 'its', 'way', 'make', 'even', 'only', 'after', 'over', 'back', 'well', 'did', 'does', 'too'), tokens(lower(text))) AS word WHERE $__timeFilter(created_at) AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} GROUP BY word ORDER BY freq DESC LIMIT 50",
           "format": 0,
           "refId": "A"
         }

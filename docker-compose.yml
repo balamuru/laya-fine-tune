@@ -93,7 +93,7 @@ services:
     env_file: .env
     environment:
     - GF_SECURITY_ADMIN_PASSWORD=admin
-    - GF_INSTALL_PLUGINS=grafana-clickhouse-datasource
+    - GF_INSTALL_PLUGINS=grafana-clickhouse-datasource,magnesium-wordcloud-panel
     volumes:
     - grafana_data:/var/lib/grafana
     - ./grafana/provisioning:/etc/grafana/provisioning

@@ -35,6 +35,7 @@ CH_PASSWORD = os.getenv("CLICKHOUSE_PASSWORD", "")
 CH_DB = os.getenv("CLICKHOUSE_DATABASE", "bluesky")
 
 RE_KANA = re.compile(r'[\u3040-\u309F\u30A0-\u30FF]')
+RE_CASHTAG = re.compile(r'\$([A-Za-z]{1,6})\b')
 BLOCKED_TAGS = {"#nsfw", "#dlsite", "#r18", "#porn", "#hentai", "#eromanga"}
 BLOCKED_DOMAINS = ("dlaf.jp", "dlsite.com")
 BLOCKED_LABELS = {"!warn", "porn", "sexual", "nudity", "graphic-media", "nsfw"}
@@ -204,10 +205,12 @@ async def run_stream(stop_event: asyncio.Event, analytics: StreamAnalytics, nc, 
                             primary_lang = langs[0] if (langs and isinstance(langs, list)) else "en"
                             record["primary_lang"] = primary_lang
 
-                            # Extract hashtags (FR2.2)
+                            # Extract hashtags (FR2.2) and cashtags / stock tickers
                             text = record.get("text", "")
                             hashtags = [word for word in text.split() if word.startswith("#")]
                             record["extracted_hashtags"] = hashtags
+                            cashtags = [f"${m.upper()}" for m in RE_CASHTAG.findall(text)]
+                            record["extracted_cashtags"] = cashtags
                             
                             # Publish to NATS JetStream
                             payload = json.dumps(parsed_data).encode("utf-8")
