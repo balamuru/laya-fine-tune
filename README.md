@@ -28,6 +28,20 @@ A production-grade, real-time streaming intelligence pipeline that ingests the p
 
 ---
 
+## About the Project
+
+Public social streams like the decentralized AT Protocol (Bluesky) generate millions of natural language events daily. While standard data stacks can collect this data, extracting actionable semantic meaning (e.g. topic categorization, sentiment velocity, breaking news detection, and financial chatter) at high throughput has historically required slow, expensive generative LLM APIs.
+
+This repository demonstrates how to architect a modern, **zero-hosted-API stream intelligence engine** by combining four best-of-breed systems:
+1. **Edge Sieve Filtering**: Discarding 75%+ of low-entropy noise, replies, spam, and spoofed scripts in pure microsecond Python before compute resources are spent.
+2. **Local System One AI with Laya**: Running non-autoregressive, zero-shot semantic judgments directly on local hardware via `vinaybalamuru/laya:cuda`, achieving sub-15ms multi-task classification per batch with zero cloud bills.
+3. **Columnar Vectorized Storage with ClickHouse**: Ingesting micro-batches with persistent array structures, real-time consumer queue telemetry, and sub-4ms in-database stopword tokenization.
+4. **Declarative Operational Monitoring with Grafana**: An 18-panel live dashboard featuring sequential funnel accounting, worker lag detection, and 6 synchronized drilldown filters with 1-click baseline resets.
+
+Whether you are monitoring breaking news, tracking financial ticker sentiment (`$NVDA`, `$BTC`), detecting viral spikes, or building an active learning flywheel, this project serves as a production reference implementation for real-time AI stream processing.
+
+---
+
 ## Key Features & Highlights
 
 * **Local Laya Inference (Instead of Hosted Jev)**: Complete data sovereignty with zero external API bills. Rather than depending on hosted System One APIs like TypeSafe AI's Jev or slow cloud LLMs, all classification runs entirely in the local container via Laya on GPU tensor cores.
