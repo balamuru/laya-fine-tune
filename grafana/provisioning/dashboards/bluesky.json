@@ -2,7 +2,7 @@
   "title": "Bluesky Live Stream Analytics",
   "uid": "bluesky_stream_01",
   "refresh": "5s",
-  "version": 6,
+  "version": 7,
   "time": {
     "from": "now-1h",
     "to": "now"
@@ -266,10 +266,6 @@
         "x": 8,
         "y": 12
       },
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "PDEE91DDB90597936"
-      },
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -280,6 +276,10 @@
             }
           }
         }
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "PDEE91DDB90597936"
       },
       "targets": [
         {
@@ -360,8 +360,8 @@
       ]
     },
     {
-      "type": "table",
-      "title": "Pipeline Stage Funnel (Full Retention Audit)",
+      "type": "piechart",
+      "title": "Category Share of Voice",
       "gridPos": {
         "h": 8,
         "w": 8,
@@ -372,9 +372,26 @@
         "type": "grafana-clickhouse-datasource",
         "uid": "PDEE91DDB90597936"
       },
+      "options": {
+        "reduceOptions": {
+          "values": true
+        },
+        "pieType": "donut",
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "percent",
+            "value"
+          ]
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
       "targets": [
         {
-          "rawSql": "SELECT '1. Raw Firehose Ingested' AS stage, sum(raw_received) AS post_count, '100.0%' AS retention_share FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp)\nUNION ALL\nSELECT '2. Dropped: Replies/Threads', sum(dropped_replies), concat('-', toString(round(100.0 * sum(dropped_replies) / nullIf(sum(raw_received), 0), 1)), '%') FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp)\nUNION ALL\nSELECT '3. Dropped: Non-English', sum(dropped_non_en), concat('-', toString(round(100.0 * sum(dropped_non_en) / nullIf(sum(raw_received), 0), 1)), '%') FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp)\nUNION ALL\nSELECT '4. Passed Sieve to NATS', sum(passed_sieve), concat(toString(round(100.0 * sum(passed_sieve) / nullIf(sum(raw_received), 0), 1)), '%') FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp)\nUNION ALL\nSELECT '5. Enriched in ClickHouse', count(*), 'Enriched' FROM bluesky.enriched_posts WHERE $__timeFilter(created_at)\nUNION ALL\nSELECT '6. Escalated Breaking Claims', countIf(is_breaking_claim >= 0.95), concat(toString(round(100.0 * countIf(is_breaking_claim >= 0.95) / nullIf(count(*), 0), 2)), '%') FROM bluesky.enriched_posts WHERE $__timeFilter(created_at)",
+          "rawSql": "SELECT category, count(*) AS count FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND category != 'unknown' GROUP BY category ORDER BY count DESC",
           "format": 0,
           "refId": "A"
         }
@@ -382,7 +399,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Posts by Category (10s Intervals)",
+      "title": "Posts by Category (Live Curves by Category)",
       "gridPos": {
         "h": 9,
         "w": 12,
@@ -393,9 +410,20 @@
         "type": "grafana-clickhouse-datasource",
         "uid": "PDEE91DDB90597936"
       },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
       "targets": [
         {
-          "rawSql": "SELECT toStartOfInterval(created_at, INTERVAL 10 SECOND) AS time, category, count(*) AS count FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) GROUP BY time, category ORDER BY time",
+          "rawSql": "SELECT\n  toStartOfInterval(created_at, INTERVAL 10 SECOND) AS time,\n  countIf(category = 'tech') AS Tech,\n  countIf(category = 'politics') AS Politics,\n  countIf(category = 'entertainment') AS Entertainment,\n  countIf(category = 'finance') AS Finance,\n  countIf(category = 'lifestyle') AS Lifestyle,\n  countIf(category = 'other') AS Other\nFROM bluesky.enriched_posts\nWHERE $__timeFilter(created_at)\nGROUP BY time\nORDER BY time",
           "format": 1,
           "refId": "A"
         }
