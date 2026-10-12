@@ -1,183 +1,191 @@
-# Real-Time Stream Analytics with Laya: Master System Architecture & Pipeline Plan
+# Real-Time Stream Analytics with Laya: Master System Architecture & Production Specification
 
 ## 1. Executive Summary & System Vision
 
-This document serves as the single source of truth for the real-time stream analytics system. 
+This document serves as the master technical specification and single source of truth for the real-time stream analytics system.
 
-The system ingests high-velocity natural language events from public WebSocket firehoses (specifically the **Bluesky Jetstream** feed at 50–200+ msg/sec), filters out low-entropy noise at microsecond wire speeds, and performs rich, multi-dimensional semantic analysis using **Laya**, a non-autoregressive multilingual System 1 decision engine.
+The system ingests high-velocity natural language events from public WebSocket firehoses (specifically the **Bluesky Jetstream** feed at 50–200+ msg/sec), filters out low-entropy noise and adversarial spam at microsecond wire speeds, and performs rich, multi-dimensional semantic analysis using **Laya**, a non-autoregressive multilingual System One decision engine.
 
-To ensure resilience against micro-outages and to enable efficient batching, the pipeline utilizes **NATS JetStream** as an elastic, memory-backed shock absorber. The entire stack is deployed as composable Docker containers configured via a central `.env` file.
-
----
-
-## 2. Architecture Decision: Serving Laya via HTTP (`laya serve`)
-
-- **Decision:** Run `laya serve` as an independent, decoupled HTTP daemon and dispatch requests via `/v1/systemone/batch`.
-- **Status:** **Accepted**
-
-### Strategic Justifications
-1. **Backpressure Elimination & Zero Socket Drops:** Decoupling ensures the ingestion worker remains purely non-blocking.
-2. **Negligible Amortized Latency:** Network overhead amortizes to **<0.1 ms per event** over micro-batches of 32 items.
-3. **Fault Isolation & Independent Scaling:** Model crashes do not crash the ingestion process.
-4. **Zero-Downtime Model Updates:** Hot-swap models without disconnecting the 24/7 stream ingestor.
+To ensure resilience against micro-outages and to enable efficient micro-batching, the pipeline utilizes **NATS JetStream** as an elastic, memory-backed shock absorber. All enriched data is indexed into **ClickHouse** and surfaced via an 18-panel **Grafana** dashboard with live telemetry and interactive multi-dimensional drilldowns.
 
 ---
 
-## 3. End-to-End System Architecture
+## 2. End-to-End System Architecture
 
 ```text
-[WebSocket Firehose (Bluesky Jetstream)]
-                   │  Raw JSON events (~100+ posts/s)
+[WebSocket Firehose (Bluesky Jetstream ~50 ops/s)]
+                   │  Raw JSON events
                    ▼
 ┌──────────────────────────────────────────────────────────┐
-│      1. Ingestion Service (Python Worker)                │
+│      1. Ingestion Service (ingest.py)                    │
 │  • Async WebSocket client with auto-reconnect            │
-│  • Tier 1: Deterministic Metadata Filter (<0.01ms CPU)   │
-│  • Pushes high-signal posts (~30-40/s) to NATS           │
+│  • Tier 1 Deterministic Sieve (<0.01ms CPU):             │
+│    - Root post extraction (drops replies)                │
+│    - Non-English metadata check                          │
+│    - Adversarial script check (Kana regex anti-spoof)    │
+│    - Blocked tags (#nsfw, #dlsite, #r18) & domains       │
+│    - AT Protocol adult/warning label inspection          │
+│    - Regex-based Cashtag extraction ($TICKER)            │
+│  • Pushes clean events to NATS (~10-15 msgs/s)           │
+│  • Emits funnel_stats & queue_stats to ClickHouse        │
 └──────────────────────────┬───────────────────────────────┘
                            │  Publish to `stream.raw`
                            ▼
 ┌──────────────────────────────────────────────────────────┐
-│      2. NATS JetStream Broker (Elastic Shock Absorber)   │
-│  • Memory-backed Ring Buffer (No disk I/O)               │
-│  • Short TTL (e.g., 60s) & Max Msg limits                │
-│  • Absorbs bursts; drops worthless stale data            │
+│      2. NATS JetStream Broker (Elastic Buffer)           │
+│  • Memory-backed Ring Buffer (`stream.raw`)              │
+│  • Short TTL (60s) & Max Message caps (10,000)           │
+│  • Prevents data loss during downstream GPU/DB spikes    │
 └──────────────────────────┬───────────────────────────────┘
                            │  Batch Pull (e.g., 32 items)
                            ▼
 ┌──────────────────────────────────────────────────────────┐
-│      3. Inference Service (Python Worker)                │
+│      3. Inference Service (inference.py)                 │
 │  • Pulls micro-batches from NATS JetStream               │
-│  • Tier 2: Dispatches POST /v1/systemone/batch to Laya   │
+│  • Tier 2: Calls Laya Serve (/v1/systemone/batch):       │
+│    - category (tech, finance, politics, etc.)            │
+│    - sentiment (positive, neutral, negative)             │
+│    - virality (0.0 to 1.0 probability)                   │
+│    - is_breaking_claim (0.0 to 1.0 confidence)           │
+│    - geo_region (north_america, europe, asia, etc.)      │
+│    - is_nsfw (0.0 to 1.0 safety probability)             │
 │  • Publishes enriched events to `stream.enriched`        │
 └──────────────────────────┬───────────────────────────────┘
                            │  Publish to `stream.enriched`
                            ▼
 ┌──────────────────────────────────────────────────────────┐
-│      4. Stream Dispatcher & Sinks                        │
+│      4. Analytics Sink & Dispatcher (sink.py)            │
+│  • Pulls batches of 100 from NATS                        │
+│  • Inserts columnar records into ClickHouse              │
+│  • Employs ACK on insert success, NAK on failure         │
 └──────────────┬────────────────────────────┬──────────────┘
-               │                            │ (Outliers: factual_claim > 0.85 &
-               ▼                            ▼            virality == high)
+               │                            │ (Breaking Claims: is_breaking >= 0.85)
+               ▼                            ▼
 ┌──────────────────────────────┐  ┌────────────────────────────────────┐
-│      Analytics Sink          │  │     Tier 3 Placeholder Handler     │
-│  • DuckDB / ClickHouse       │  │  • Subscribes to outliers          │
-│  • Real-time Dashboards      │  │  • Future: Gemini/Claude reasoning │
-└──────────────────────────────┘  └────────────────────────────────────┘
+│      ClickHouse Database     │  │      Escalation Service            │
+│  • bluesky.enriched_posts    │  │  • Subscribes to stream.enriched   │
+│  • bluesky.funnel_stats      │  │  • Emits to stream.escalation      │
+│  • bluesky.queue_stats       │  │  • Dispatches autonomous agents    │
+└──────────────┬───────────────┘  └────────────────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│      Grafana Dashboard       │
+│  • 18 Live Visual Panels     │
+│  • 5-Second Auto-Refresh     │
+│  • 6 Multi-Dimensional Drill │
+│  • 1-Click Baseline Reset    │
+└──────────────────────────────┘
 ```
 
 ---
 
-## 4. Infrastructure & Docker Deployment Strategy
+## 3. Two-Tier Filtering Architecture
 
-The pipeline is provisioned as a fully self-contained Docker Compose application. The `docker-compose.yml` natively embeds the Laya inference server alongside the NATS broker and our Python workers. All tunable parameters are isolated in the `.env` file.
+### Tier 1: Deterministic Edge Sieve (`ingest.py`)
+Executed at wire speed in pure Python before events enter the message bus:
+1. **Reply Exclusion**: Evaluates `"reply" not in record` to focus on root conversational seeds and headlines.
+2. **Language Gating**: Evaluates declared `langs` metadata for `"en"`.
+3. **Adversarial Anti-Spoofing**: Inspects post text for Japanese Kana characters (`[\u3040-\u309F\u30A0-\u30FF]`). Catches automated botnets that spoof `langs: ["en"]` metadata.
+4. **Signature Matching**: Discards known spam domains (`dlaf.jp`, `dlsite.com`) and adult tags (`#nsfw`, `#r18`, `#porn`, `#hentai`).
+5. **Protocol Label Inspection**: Evaluates AT Protocol `labels` dictionary for adult, graphic, or sexual flags.
+6. **Cashtag Extraction**: Regex `r'\$([A-Za-z]{1,6})\b'` extracts normalized financial and crypto symbols (`$NVDA`, `$BTC`).
 
-### Composable Services
-1. **`nats`**: The NATS server running with JetStream enabled (`-js`).
-2. **`laya-serve`**: The Laya HTTP REST API service natively embedded into our compose stack (using `vinaybalamuru/laya:cuda` and mapping the external `laya_model-cache` volume).
-3. **`ingest`**: The Python application running the WebSocket consumer and Tier 1 filter.
-4. **`inference`**: The Python application pulling from JetStream, calling `laya-serve`, and publishing results.
-5. **`analytics`**: (Phase 3) The ClickHouse database and Grafana layer.
+### Tier 2: System One Semantic Inference (`inference.py`)
+Executed by the local Laya server (`/v1/systemone/batch`) in micro-batches of 32. 
 
-### Environment Configuration (`.env`)
-The self-contained `.env` file manages both pipeline configs and the Laya runtime configurations:
-```env
-# Pipeline Infrastructure
-NATS_URL=nats://nats:4222
-JETSTREAM_RAW_SUBJECT=stream.raw
-JETSTREAM_ENRICHED_SUBJECT=stream.enriched
+**Local Laya vs. Hosted Jev System Design Decision**:
+Rather than depending on hosted System One APIs like TypeSafe AI's Jev or slow cloud LLMs, this architecture runs **Laya on-device** inside the local Docker environment (`vinaybalamuru/laya:cuda`). This eliminates external network transit latency, prevents cloud API egress costs, guarantees data privacy, and enables deterministic throughput during firehose spikes.
 
-# Laya Inference Server Settings
-SYSTEM_ONE_URL=http://laya-serve:8111
-SYSTEM_ONE_BATCH_SIZE=32
-LAYA_IMAGE=vinaybalamuru/laya:cuda
-LAYA_DEVICE=cuda
-LAYA_CUDA_AMP=fp16
+The single forward pass evaluates 6 concurrent criteria:
+* **`category`** (Choice): `tech`, `finance`, `politics`, `entertainment`, `lifestyle`, `other`.
+* **`sentiment`** (Choice): `positive`, `neutral`, `negative`.
+* **`virality`** (Score): Float rating predicted viral spread.
+* **`is_breaking_claim`** (Probability): 0.0 to 1.0 confidence that the text reports breaking, urgent, or unverified claims.
+* **`geo_region`** (Choice): `north_america`, `europe`, `asia`, `middle_east`, `latin_america`, `africa`, `oceania`, `global_none`.
+* **`is_nsfw`** (Probability): Semantic safety score identifying contextual toxicity or adult content that evades static blocklists.
 
-# Ingestion Target
-JETSTREAM_WS_URL=wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.feed.post
-SIEVE_ROOT_POSTS_ONLY=true
+---
+
+## 4. ClickHouse Schema & In-Database Analytics
+
+ClickHouse serves as the vectorized analytical engine hosting three core tables:
+
+### 1. `bluesky.enriched_posts`
+Stores individual classified social events with columnar array indexing:
+```sql
+CREATE TABLE IF NOT EXISTS bluesky.enriched_posts (
+    id String,
+    created_at DateTime,
+    text String,
+    author_did String,
+    hashtags Array(String),
+    cashtags Array(String),
+    category String,
+    sentiment String,
+    virality Float32,
+    is_breaking_claim Float32,
+    geo_region LowCardinality(String) DEFAULT 'global_none',
+    primary_lang LowCardinality(String) DEFAULT 'en',
+    is_nsfw Float32 DEFAULT 0.0
+) ENGINE = MergeTree()
+ORDER BY (created_at, category, sentiment);
+```
+
+### 2. `bluesky.funnel_stats`
+Provides mathematical attribution for the ingestion sieve in 3-second windows:
+* `timestamp`, `window_seconds`, `raw_received`, `dropped_replies`, `dropped_non_en`, `dropped_spam_nsfw`, `passed_sieve`, `raw_rate`, `passed_rate`.
+
+### 3. `bluesky.queue_stats`
+Logs NATS JetStream consumer lag every 3 seconds for real-time queue health:
+* `timestamp`, `consumer`, `backlog`, `in_flight`, `redelivered`.
+
+### 4. Vectorized Stopword Exclusion & Keyword Tokenization
+Word clouds are generated dynamically in ClickHouse using native array functions without Python or external NLP overhead:
+```sql
+SELECT
+    word,
+    count() AS freq
+FROM bluesky.enriched_posts
+ARRAY JOIN arrayFilter(
+    w -> length(w) >= 3 
+         AND match(w, '^[a-z]+$') 
+         AND w NOT IN ('the', 'and', 'for', 'that', 'this', 'with', 'from', 'have', 'just', 'like', 'https', 'http', 'com', 'www', 'bsky'),
+    tokens(lower(text))
+) AS word
+WHERE $__timeFilter(created_at)
+  AND is_nsfw < 0.5
+  AND ${category_filter}
+GROUP BY word
+ORDER BY freq DESC
+LIMIT 50;
 ```
 
 ---
 
-## 5. Multi-Tier Filtering & Decision Specifications
+## 5. Grafana Dashboard Specification (`bluesky_stream_01`)
 
-### Tier 1: Deterministic Metadata Filtering (Sub-Millisecond CPU)
-Executed by the **Ingestion Service** before hitting NATS:
-* `operation == "create"`
-* Target language matching (`record.langs`).
-* Minimum character count ($\ge 20$) and word count ($\ge 4$).
-* Regex validation (drop pure emoji/symbol spam).
+The dashboard features 18 real-time panels organized into functional operational zones:
 
-### Tier 2: Laya Multi-Dimensional Decision Schema
-Executed by the **Inference Service** using Laya's single forward pass:
-* **`category`** (choice): Tech, politics, entertainment, finance, lifestyle.
-* **`sentiment`** (choice): Positive, negative, neutral.
-* **`virality`** (score): Mundane, conversational, incendiary.
-* **`is_breaking_claim`** (noul): 0.0 to 1.0 probability of a verifiable factual claim.
+1. **KPI Stat Cards**: Raw Firehose Total, Pipeline Yield %, Ingestion Speed (ops/s), Breaking Claims Alerts.
+2. **Velocity & Funnel Audit**: 3-series throughput speed comparison (Firehose vs. Sieve vs. Final Output) and 7-stage sequential attribution table.
+3. **Queue Health & Worker Lag**: Real-time worker health status table (`HEALTHY`, `MODERATE`, `OVERWORKED`, `STALLED`) and consumer lag curves.
+4. **Topic & Sentiment Distribution**: Trending hashtags bar chart, 100% stacked sentiment breakdown (Blue/Yellow/Red), and viral hashtags table.
+5. **Audience & Geographic Demographics**: Most active posters table (with bot activity tiering), regional mentions bar chart, category share of voice donut chart, and live category volume curves.
+6. **Financial & Emerging Signals**: Breaking Claims radar table, Trending Stock & Crypto Cashtags (`$TICKER`), and Stopword-filtered Category Word Cloud.
+
+### Template Filter Variables
+* **`region_filter`**: Custom geographic region selector.
+* **`category_filter`**: Topic category selector.
+* **`sentiment_filter`**: Sentiment selector (Positive, Neutral, Negative).
+* **`top_hashtag`**: Dynamic query variable loading the top 50 trending tags from the last 2 hours with search-as-you-type support.
+* **`custom_hashtag`**: Free-text textbox matching arbitrary hashtags and post keywords.
+* **`bot_filter`**: Account posting activity tier (`All Accounts`, `Humans <= 15 posts/hr`, `Casual <= 5 posts/hr`, `Automated Feeds > 15 posts/hr`).
+* **`↺ Reset Filters to Default`**: Header toolbar link restoring all variables to default in one click.
 
 ---
 
-## 6. Phased Implementation Plan (Capstone Quality)
+## 6. Feedback & Active Learning Loops
 
-This project is structured as a capstone, moving from raw ingestion to a flexible, production-grade analytics dashboard with hooks for future AI research workflows.
-
-### Phase 1: Core Infrastructure & Ingestion (The Firehose)
-**Goal:** Establish the composable Docker environment, connect to the Bluesky firehose, and prove we can route messages through NATS JetStream without dropping connections.
-
-*   **Functional Requirements (FRs):**
-    *   **FR1.1:** Docker Compose must spin up NATS JetStream, Laya Serve, and Python worker containers seamlessly.
-    *   **FR1.2:** Ingestion script must maintain a persistent, auto-reconnecting WebSocket connection to Bluesky Jetstream.
-    *   **FR1.3:** Ingestion script must push raw messages to NATS JetStream under the `stream.raw` subject.
-*   **Evaluations (Evals):**
-    *   **Eval 1.1:** Run `docker-compose up -d`. Verify all containers reach a "healthy" state.
-    *   **Eval 1.2:** Disconnect network temporarily; verify Python worker auto-reconnects to Bluesky within 5 seconds without crashing.
-    *   **Eval 1.3:** Use `nats sub stream.raw` in the CLI to visually confirm message throughput matches firehose volume.
-
-### Phase 2: The Sieve & Laya Inference (The Brain)
-**Goal:** Implement the deterministic Stage 2 filter and the Stage 3 Laya batch-inference logic, driven by the `.env` configuration.
-
-*   **Functional Requirements (FRs):**
-    *   **FR2.1:** Stage 2 Sieve must filter posts based on `.env` toggles (e.g., `SIEVE_ROOT_POSTS_ONLY=true`).
-    *   **FR2.2:** Stage 2 must extract and append `#hashtags` to the message metadata before NATS publishing.
-    *   **FR2.3:** Inference worker must pull micro-batches (e.g., size 32) from `stream.raw`, hit the `laya serve` `/v1/systemone/batch` endpoint, and publish to `stream.enriched`.
-*   **Evaluations (Evals):**
-    *   **Eval 2.1:** Toggle `.env` variables and verify log output reflects the new filtering rules immediately upon restart.
-    *   **Eval 2.2:** Inspect NATS `stream.raw` payload to confirm `#hashtags` array exists.
-    *   **Eval 2.3:** Measure end-to-end latency. The Laya inference step must process a batch of 32 in < 50ms total.
-
-### Phase 3: The Capstone Analytics Sink & Dashboard (The Eyes)
-**Goal:** Ingest the enriched data into an OLAP database and visualize it in real-time, building a flexible monitoring dashboard.
-
-*   **Functional Requirements (FRs):**
-    *   **FR3.1:** Deploy a Time-Series/OLAP database (e.g., ClickHouse) via Docker Compose.
-    *   **FR3.2:** Create a Sink Worker that subscribes to `stream.enriched` and batch-inserts records into the database.
-    *   **FR3.3:** Deploy Grafana (or Streamlit) connected to the database to visualize live metrics (sentiment velocity, trending hashtags, topic distribution).
-*   **Evaluations (Evals):**
-    *   **Eval 3.1:** Run SQL queries directly against the database to verify data integrity and schema types.
-    *   **Eval 3.2:** Stress test: simulate 500 msgs/sec for 5 minutes and verify 0 dropped inserts in the database.
-    *   **Eval 3.3:** Visually confirm the dashboard updates in real-time (sub-5-second latency from firehose to chart).
-
-### Phase 4: Flexible Triggers & Escalation (The Future)
-**Goal:** Implement the Tier 3 Placeholder to ensure the architecture is flexible enough to trigger heavy LangGraph research agents or external data collection later on.
-
-*   **Functional Requirements (FRs):**
-    *   **FR4.1:** Establish a NATS consumer specifically listening for outlier thresholds (e.g., `laya.is_breaking_claim > 0.95`).
-    *   **FR4.2:** Design a flexible "Trigger Schema" allowing messages to be pushed to a webhook or a separate queue (`stream.escalation`).
-    *   **FR4.3:** Ensure the trigger mechanism does not block or slow down the main `stream.enriched` pipeline.
-*   **Evaluations (Evals):**
-    *   **Eval 4.1:** Inject a synthetic "perfect storm" message into NATS. Verify it triggers the specific escalation consumer.
-    *   **Eval 4.2:** Check the empty LangGraph placeholder block to ensure the payload arrives fully structured and ready for future heavy LLM processing.
-
-### Phase 5: Active Learning & Distillation Loop (The Feedback)
-**Goal:** Establish a pipeline to collect high-value "edge case" data, label it using a frontier model (Gemini/Claude), and build a dataset for fine-tuning future versions of Laya.
-
-*   **Functional Requirements (FRs):**
-    *   **FR5.1:** Create a "Distillation Collector" Python worker that subscribes to `stream.enriched`.
-    *   **FR5.2:** Implement intelligent sampling strategies (e.g., capture posts where Laya's confidence score is between 0.4 and 0.6).
-    *   **FR5.3:** Integrate an API client to send sampled posts to a frontier LLM for "gold standard" classification.
-    *   **FR5.4:** Output the raw post and the gold label to a persistent dataset (e.g., JSONL volume or a specific ClickHouse table) for later fine-tuning.
-*   **Evaluations (Evals):**
-    *   **Eval 5.1:** Run the collector and verify it only intercepts messages matching the low-confidence heuristic.
-    *   **Eval 5.2:** Verify the frontier model API is called successfully and returns structured JSON labels.
-    *   **Eval 5.3:** Inspect the output dataset to confirm the formatting is ready for Laya fine-tuning ingestion.
+* **Phase 4 (Escalation)**: Posts with `is_breaking_claim >= 0.85` and `virality >= 0.70` are routed to `stream.escalation` for autonomous multi-agent deep research.
+* **Phase 5 (Distillation)**: A background worker samples ambiguous posts where Laya prediction confidence is between 0.4 and 0.6, obtains gold-standard classifications from a frontier teacher model (Gemini 1.5), and writes to a persistent dataset volume for downstream fine-tuning.

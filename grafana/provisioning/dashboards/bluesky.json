@@ -2,11 +2,25 @@
   "title": "Bluesky Live Stream Analytics",
   "uid": "bluesky_stream_01",
   "refresh": "5s",
-  "version": 16,
+  "version": 21,
   "time": {
     "from": "now-1h",
     "to": "now"
   },
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "sync",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "↺ Reset Filters to Default",
+      "tooltip": "Clears all custom filters and restores default baseline values",
+      "type": "link",
+      "url": "/d/bluesky_stream_01?var-region_filter=1+%3D+1&var-category_filter=1+%3D+1&var-sentiment_filter=1+%3D+1&var-top_hashtag=All&var-custom_hashtag=&var-bot_filter=1+%3D+1"
+    }
+  ],
   "templating": {
     "list": [
       {
@@ -51,10 +65,53 @@
         ]
       },
       {
-        "name": "bot_filter",
-        "label": "Account Filter",
+        "name": "sentiment_filter",
+        "label": "Sentiment",
         "type": "custom",
-        "query": "All Accounts : 1 = 1, Exclude High-Freq Bots (<= 15 posts/hr) : post_count <= 15, Exclude Bots (<= 5 posts/hr) : post_count <= 5, Bots Only (> 15 posts/hr) : post_count > 15",
+        "query": "All Sentiments : 1 = 1, Positive : sentiment = 'positive', Neutral : sentiment = 'neutral', Negative : sentiment = 'negative'",
+        "current": {
+          "selected": true,
+          "text": "All Sentiments",
+          "value": "1 = 1"
+        },
+        "options": [
+          { "selected": true, "text": "All Sentiments", "value": "1 = 1" },
+          { "selected": false, "text": "Positive", "value": "sentiment = 'positive'" },
+          { "selected": false, "text": "Neutral", "value": "sentiment = 'neutral'" },
+          { "selected": false, "text": "Negative", "value": "sentiment = 'negative'" }
+        ]
+      },
+      {
+        "name": "top_hashtag",
+        "label": "Trending Hashtags (Top 50)",
+        "type": "query",
+        "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
+        "definition": "SELECT DISTINCT hashtag FROM (SELECT hashtag, count(*) AS c FROM bluesky.enriched_posts ARRAY JOIN hashtags AS hashtag WHERE created_at >= now() - INTERVAL 2 HOUR AND hashtag != '' GROUP BY hashtag ORDER BY c DESC LIMIT 50)",
+        "query": "SELECT DISTINCT hashtag FROM (SELECT hashtag, count(*) AS c FROM bluesky.enriched_posts ARRAY JOIN hashtags AS hashtag WHERE created_at >= now() - INTERVAL 2 HOUR AND hashtag != '' GROUP BY hashtag ORDER BY c DESC LIMIT 50)",
+        "includeAll": true,
+        "allValue": "All",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "All"
+        },
+        "refresh": 2,
+        "sort": 0
+      },
+      {
+        "name": "custom_hashtag",
+        "label": "Custom Hashtag / Keyword",
+        "type": "textbox",
+        "current": {
+          "selected": false,
+          "value": ""
+        }
+      },
+      {
+        "name": "bot_filter",
+        "label": "Account Activity / Bot Filter",
+        "type": "custom",
+        "query": "All Accounts : 1 = 1, Humans & Regular Posters (<= 15 posts/hr) : post_count <= 15, Casual Posters Only (<= 5 posts/hr) : post_count <= 5, Automated Feeds & Bots (> 15 posts/hr) : post_count > 15",
         "current": {
           "selected": true,
           "text": "All Accounts",
@@ -62,9 +119,9 @@
         },
         "options": [
           { "selected": true, "text": "All Accounts", "value": "1 = 1" },
-          { "selected": false, "text": "Exclude High-Freq Bots (<= 15 posts/hr)", "value": "post_count <= 15" },
-          { "selected": false, "text": "Exclude Bots (<= 5 posts/hr)", "value": "post_count <= 5" },
-          { "selected": false, "text": "Bots Only (> 15 posts/hr)", "value": "post_count > 15" }
+          { "selected": false, "text": "Humans & Regular Posters (<= 15 posts/hr)", "value": "post_count <= 15" },
+          { "selected": false, "text": "Casual Posters Only (<= 5 posts/hr)", "value": "post_count <= 5" },
+          { "selected": false, "text": "Automated Feeds & Bots (> 15 posts/hr)", "value": "post_count > 15" }
         ]
       }
     ]
@@ -149,7 +206,7 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT count(*) FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND is_breaking_claim >= 0.85 AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter}",
+          "rawSql": "SELECT count(*) FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND is_breaking_claim >= 0.85 AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} AND ${sentiment_filter} AND multiIf('$top_hashtag' = 'All' OR '$top_hashtag' = '', 1 = 1, has(hashtags, '$top_hashtag')) AND multiIf('$custom_hashtag' = '' OR '$custom_hashtag' = 'All', 1 = 1, has(hashtags, multiIf(startsWith('$custom_hashtag', '#'), '$custom_hashtag', concat('#', '$custom_hashtag'))) OR ilike(text, concat('%', '$custom_hashtag', '%')))",
           "format": 0,
           "refId": "A"
         }
@@ -266,7 +323,7 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT arrayJoin(hashtags) AS hashtag, count(*) AS \"Post Count\" FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND hashtag != '' AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} GROUP BY hashtag ORDER BY \"Post Count\" DESC LIMIT 10",
+          "rawSql": "SELECT arrayJoin(hashtags) AS hashtag, count(*) AS \"Post Count\" FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND hashtag != '' AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} AND ${sentiment_filter} AND multiIf('$custom_hashtag' = '' OR '$custom_hashtag' = 'All', 1 = 1, has(hashtags, multiIf(startsWith('$custom_hashtag', '#'), '$custom_hashtag', concat('#', '$custom_hashtag'))) OR ilike(text, concat('%', '$custom_hashtag', '%'))) GROUP BY hashtag ORDER BY \"Post Count\" DESC LIMIT 10",
           "format": 0,
           "refId": "A"
         }
@@ -323,7 +380,7 @@
       "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
       "targets": [
         {
-          "rawSql": "SELECT arrayJoin(hashtags) AS hashtag, round(avg(virality), 2) AS avg_virality, count(*) AS sample_posts FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND hashtag != '' AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} GROUP BY hashtag HAVING sample_posts >= 2 ORDER BY avg_virality DESC, sample_posts DESC LIMIT 10",
+          "rawSql": "SELECT arrayJoin(hashtags) AS hashtag, round(avg(virality), 2) AS avg_virality, count(*) AS sample_posts FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND hashtag != '' AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} AND ${sentiment_filter} AND multiIf('$custom_hashtag' = '' OR '$custom_hashtag' = 'All', 1 = 1, has(hashtags, multiIf(startsWith('$custom_hashtag', '#'), '$custom_hashtag', concat('#', '$custom_hashtag'))) OR ilike(text, concat('%', '$custom_hashtag', '%'))) GROUP BY hashtag HAVING sample_posts >= 2 ORDER BY avg_virality DESC, sample_posts DESC LIMIT 10",
           "format": 0,
           "refId": "A"
         }
@@ -331,12 +388,13 @@
     },
     {
       "type": "table",
-      "title": "Most Active Posters (Controlled by Account Filter Toggle)",
+      "title": "Most Active Posters (Filtered by Activity Tier)",
+      "description": "Displays authors ranked by post volume. Controlled by the 'Account Activity / Bot Filter' dropdown at top.",
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 27 },
       "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
       "targets": [
         {
-          "rawSql": "SELECT author_did, count(*) AS post_count, round(avg(virality), 2) AS avg_virality, topK(1)(category)[1] AS dominant_category FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} GROUP BY author_did HAVING ${bot_filter} ORDER BY post_count DESC LIMIT 10",
+          "rawSql": "SELECT author_did, count(*) AS post_count, round(avg(virality), 2) AS avg_virality, topK(1)(category)[1] AS dominant_category FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} AND ${sentiment_filter} AND multiIf('$top_hashtag' = 'All' OR '$top_hashtag' = '', 1 = 1, has(hashtags, '$top_hashtag')) AND multiIf('$custom_hashtag' = '' OR '$custom_hashtag' = 'All', 1 = 1, has(hashtags, multiIf(startsWith('$custom_hashtag', '#'), '$custom_hashtag', concat('#', '$custom_hashtag'))) OR ilike(text, concat('%', '$custom_hashtag', '%'))) GROUP BY author_did HAVING ${bot_filter} ORDER BY post_count DESC LIMIT 10",
           "format": 0,
           "refId": "A"
         }
@@ -379,7 +437,7 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT category, count(*) AS count FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND category != 'unknown' AND is_nsfw < 0.5 AND ${region_filter} GROUP BY category ORDER BY count DESC",
+          "rawSql": "SELECT category, count(*) AS count FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND category != 'unknown' AND is_nsfw < 0.5 AND ${region_filter} AND ${sentiment_filter} AND multiIf('$top_hashtag' = 'All' OR '$top_hashtag' = '', 1 = 1, has(hashtags, '$top_hashtag')) AND multiIf('$custom_hashtag' = '' OR '$custom_hashtag' = 'All', 1 = 1, has(hashtags, multiIf(startsWith('$custom_hashtag', '#'), '$custom_hashtag', concat('#', '$custom_hashtag'))) OR ilike(text, concat('%', '$custom_hashtag', '%'))) GROUP BY category ORDER BY count DESC",
           "format": 0,
           "refId": "A"
         }
@@ -396,7 +454,7 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT\n  toStartOfInterval(created_at, INTERVAL 15 SECOND) AS time,\n  countIf(category = 'tech') AS Tech,\n  countIf(category = 'entertainment') AS Entertainment,\n  countIf(category = 'politics') AS Politics,\n  countIf(category = 'finance') AS Finance,\n  countIf(category = 'lifestyle') AS Lifestyle,\n  countIf(category = 'other') AS Other\nFROM bluesky.enriched_posts\nWHERE $__timeFilter(created_at) AND is_nsfw < 0.5 AND ${region_filter}\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  toStartOfInterval(created_at, INTERVAL 15 SECOND) AS time,\n  countIf(category = 'tech') AS Tech,\n  countIf(category = 'entertainment') AS Entertainment,\n  countIf(category = 'politics') AS Politics,\n  countIf(category = 'finance') AS Finance,\n  countIf(category = 'lifestyle') AS Lifestyle,\n  countIf(category = 'other') AS Other\nFROM bluesky.enriched_posts\nWHERE $__timeFilter(created_at) AND is_nsfw < 0.5 AND ${region_filter} AND ${sentiment_filter} AND multiIf('$top_hashtag' = 'All' OR '$top_hashtag' = '', 1 = 1, has(hashtags, '$top_hashtag')) AND multiIf('$custom_hashtag' = '' OR '$custom_hashtag' = 'All', 1 = 1, has(hashtags, multiIf(startsWith('$custom_hashtag', '#'), '$custom_hashtag', concat('#', '$custom_hashtag'))) OR ilike(text, concat('%', '$custom_hashtag', '%')))\nGROUP BY time\nORDER BY time",
           "format": 1,
           "refId": "A"
         }
@@ -409,7 +467,7 @@
       "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
       "targets": [
         {
-          "rawSql": "SELECT toString(created_at) AS timestamp, category, geo_region, round(is_breaking_claim, 2) AS breaking_conf, round(virality, 2) AS virality, text FROM bluesky.enriched_posts WHERE is_breaking_claim >= 0.85 AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} ORDER BY created_at DESC LIMIT 25",
+          "rawSql": "SELECT toString(created_at) AS timestamp, category, geo_region, round(is_breaking_claim, 2) AS breaking_conf, round(virality, 2) AS virality, text FROM bluesky.enriched_posts WHERE is_breaking_claim >= 0.85 AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} AND ${sentiment_filter} AND multiIf('$top_hashtag' = 'All' OR '$top_hashtag' = '', 1 = 1, has(hashtags, '$top_hashtag')) AND multiIf('$custom_hashtag' = '' OR '$custom_hashtag' = 'All', 1 = 1, has(hashtags, multiIf(startsWith('$custom_hashtag', '#'), '$custom_hashtag', concat('#', '$custom_hashtag'))) OR ilike(text, concat('%', '$custom_hashtag', '%'))) ORDER BY created_at DESC LIMIT 25",
           "format": 0,
           "refId": "A"
         }
@@ -434,7 +492,7 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT cashtag, count(*) AS mentions FROM bluesky.enriched_posts ARRAY JOIN cashtags AS cashtag WHERE $__timeFilter(created_at) AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} GROUP BY cashtag ORDER BY mentions DESC LIMIT 15",
+          "rawSql": "SELECT cashtag, count(*) AS mentions FROM bluesky.enriched_posts ARRAY JOIN cashtags AS cashtag WHERE $__timeFilter(created_at) AND is_nsfw < 0.5 AND ${region_filter} AND multiIf('${category_filter}' LIKE '%finance%' OR '${category_filter}' LIKE '%tech%', ${category_filter}, 1 = 1) AND ${sentiment_filter} AND multiIf('$top_hashtag' = 'All' OR '$top_hashtag' = '', 1 = 1, has(hashtags, '$top_hashtag')) AND multiIf('$custom_hashtag' = '' OR '$custom_hashtag' = 'All', 1 = 1, has(hashtags, multiIf(startsWith('$custom_hashtag', '#'), '$custom_hashtag', concat('#', '$custom_hashtag'))) OR ilike(text, concat('%', '$custom_hashtag', '%'))) GROUP BY cashtag ORDER BY mentions DESC LIMIT 15",
           "format": 0,
           "refId": "A"
         }
@@ -451,7 +509,7 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT word, count(*) AS freq FROM bluesky.enriched_posts ARRAY JOIN arrayFilter(w -> length(w) >= 3 AND match(w, '^[a-z]+$') AND w NOT IN ('the', 'and', 'for', 'that', 'this', 'with', 'from', 'have', 'has', 'had', 'just', 'like', 'about', 'what', 'when', 'your', 'they', 'them', 'their', 'will', 'some', 'been', 'there', 'more', 'would', 'which', 'https', 'http', 'com', 'www', 'bsky', 'app', 'social', 'you', 'are', 'was', 'were', 'all', 'can', 'could', 'not', 'out', 'one', 'who', 'his', 'her', 'him', 'how', 'get', 'got', 'now', 'but', 'into', 'also', 'than', 'then', 'any', 'other', 'see', 'our', 'its', 'way', 'make', 'even', 'only', 'after', 'over', 'back', 'well', 'did', 'does', 'too'), tokens(lower(text))) AS word WHERE $__timeFilter(created_at) AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} GROUP BY word ORDER BY freq DESC LIMIT 50",
+          "rawSql": "SELECT word, count(*) AS freq FROM bluesky.enriched_posts ARRAY JOIN arrayFilter(w -> length(w) >= 3 AND match(w, '^[a-z]+$') AND w NOT IN ('the', 'and', 'for', 'that', 'this', 'with', 'from', 'have', 'has', 'had', 'just', 'like', 'about', 'what', 'when', 'your', 'they', 'them', 'their', 'will', 'some', 'been', 'there', 'more', 'would', 'which', 'https', 'http', 'com', 'www', 'bsky', 'app', 'social', 'you', 'are', 'was', 'were', 'all', 'can', 'could', 'not', 'out', 'one', 'who', 'his', 'her', 'him', 'how', 'get', 'got', 'now', 'but', 'into', 'also', 'than', 'then', 'any', 'other', 'see', 'our', 'its', 'way', 'make', 'even', 'only', 'after', 'over', 'back', 'well', 'did', 'does', 'too'), tokens(lower(text))) AS word WHERE $__timeFilter(created_at) AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} AND ${sentiment_filter} AND multiIf('$top_hashtag' = 'All' OR '$top_hashtag' = '', 1 = 1, has(hashtags, '$top_hashtag')) AND multiIf('$custom_hashtag' = '' OR '$custom_hashtag' = 'All', 1 = 1, has(hashtags, multiIf(startsWith('$custom_hashtag', '#'), '$custom_hashtag', concat('#', '$custom_hashtag'))) OR ilike(text, concat('%', '$custom_hashtag', '%'))) GROUP BY word ORDER BY freq DESC LIMIT 50",
           "format": 0,
           "refId": "A"
         }
