@@ -79,6 +79,20 @@ async def process_batch(session, js, messages):
         "is_breaking_claim": {
             "type": "noul",
             "instructions": "Does this post make a verifiable factual claim or report breaking news?"
+        },
+        "geo_region": {
+            "type": "choice",
+            "instructions": "Which geographic region or continent does this post primarily reference or discuss?",
+            "criteria": {
+                "north_america": "United States, Canada, Mexico, North America",
+                "europe": "UK, Germany, France, Ukraine, EU, Europe",
+                "asia": "Japan, China, India, Korea, Taiwan, Asia",
+                "middle_east": "Israel, Palestine, Gaza, Iran, Middle East",
+                "latin_america": "Brazil, Argentina, Latin America, South America",
+                "africa": "Nigeria, Kenya, South Africa, Africa",
+                "oceania": "Australia, New Zealand",
+                "global_none": "general, personal, online, or no specific geographic focus"
+            }
         }
     }
     

@@ -14,7 +14,12 @@ class WindowMetrics:
     window_duration: float
     total_events: int
     window_events: int
-    rate_per_sec: float
+    raw_received: int
+    dropped_replies: int
+    dropped_non_en: int
+    passed_sieve: int
+    raw_rate_per_sec: float
+    passed_rate_per_sec: float
     top_languages: List[tuple[str, int]]
     latest_text_preview: str = ""
 
@@ -26,6 +31,10 @@ class StreamAnalytics:
         self.window_seconds = window_seconds
         self.total_events: int = 0
         self.window_events: int = 0
+        self.window_raw: int = 0
+        self.window_dropped_replies: int = 0
+        self.window_dropped_non_en: int = 0
+        self.window_passed_sieve: int = 0
         self.lang_counter: Counter[str] = Counter()
         self.last_window_start: float = time.time()
         self.latest_text: str = ""
@@ -48,12 +57,25 @@ class StreamAnalytics:
 
         self.total_events += 1
         self.window_events += 1
+        self.window_raw += 1
         self.latest_text = text
 
         for lang in langs:
             self.lang_counter[lang] += 1
 
         return data
+
+    def record_dropped_reply(self) -> None:
+        """Increment dropped reply counter for the window."""
+        self.window_dropped_replies += 1
+
+    def record_dropped_non_en(self) -> None:
+        """Increment dropped non-English counter for the window."""
+        self.window_dropped_non_en += 1
+
+    def record_passed_sieve(self) -> None:
+        """Increment passed sieve counter for the window."""
+        self.window_passed_sieve += 1
 
     def check_window(self) -> Optional[WindowMetrics]:
         """Check if the current window interval has elapsed.
@@ -66,18 +88,28 @@ class StreamAnalytics:
         if elapsed < self.window_seconds:
             return None
 
-        rate = self.window_events / elapsed if elapsed > 0 else 0.0
+        raw_rate = self.window_raw / elapsed if elapsed > 0 else 0.0
+        passed_rate = self.window_passed_sieve / elapsed if elapsed > 0 else 0.0
         preview = (self.latest_text[:60] + "...") if len(self.latest_text) > 60 else self.latest_text
 
         metrics = WindowMetrics(
             window_duration=elapsed,
             total_events=self.total_events,
             window_events=self.window_events,
-            rate_per_sec=rate,
+            raw_received=self.window_raw,
+            dropped_replies=self.window_dropped_replies,
+            dropped_non_en=self.window_dropped_non_en,
+            passed_sieve=self.window_passed_sieve,
+            raw_rate_per_sec=raw_rate,
+            passed_rate_per_sec=passed_rate,
             top_languages=self.lang_counter.most_common(5),
             latest_text_preview=preview,
         )
 
         self.window_events = 0
+        self.window_raw = 0
+        self.window_dropped_replies = 0
+        self.window_dropped_non_en = 0
+        self.window_passed_sieve = 0
         self.last_window_start = now
         return metrics

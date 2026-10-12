@@ -43,11 +43,20 @@ def setup_clickhouse():
         category String,
         sentiment String,
         virality Float32,
-        is_breaking_claim Float32
+        is_breaking_claim Float32,
+        geo_region LowCardinality(String),
+        primary_lang LowCardinality(String)
     ) ENGINE = MergeTree()
     ORDER BY (created_at, category, sentiment)
     """
     client.command(table_schema)
+    # Ensure existing table has the new columns if created prior
+    try:
+        client.command(f"ALTER TABLE {CH_DB}.enriched_posts ADD COLUMN IF NOT EXISTS geo_region LowCardinality(String) DEFAULT 'global_none'")
+        client.command(f"ALTER TABLE {CH_DB}.enriched_posts ADD COLUMN IF NOT EXISTS primary_lang LowCardinality(String) DEFAULT 'en'")
+    except Exception as e:
+        print(f"Schema migration note: {e}")
+
     print("ClickHouse schema verified.")
     return client
 
@@ -63,12 +72,15 @@ async def process_batch(client, messages):
             commit = payload.get("commit", {})
             record = commit.get("record", {})
             laya = payload.get("laya", {})
+            answers = laya.get("answers", laya)
             
-            # Map Laya output format (System One API uses choice/score keys)
-            category = laya.get("category", {}).get("choice", "unknown")
-            sentiment = laya.get("sentiment", {}).get("choice", "unknown")
-            virality = float(laya.get("virality", {}).get("score", 0.0))
-            is_breaking = float(laya.get("is_breaking_claim", {}).get("prob", 0.0))
+            # Map Laya output format (System One API uses choice/score/noul keys inside answers)
+            category = answers.get("category", {}).get("choice", "unknown")
+            sentiment = answers.get("sentiment", {}).get("choice", "unknown")
+            virality = float(answers.get("virality", {}).get("score", 0.0))
+            is_breaking = float(answers.get("is_breaking_claim", {}).get("noul", answers.get("is_breaking_claim", {}).get("prob", 0.0)))
+            geo_region = answers.get("geo_region", {}).get("choice", "global_none")
+            primary_lang = record.get("primary_lang", "en")
             
             from datetime import datetime, timezone
             
@@ -88,7 +100,9 @@ async def process_batch(client, messages):
                 category,
                 sentiment,
                 virality,
-                is_breaking
+                is_breaking,
+                geo_region,
+                primary_lang
             )
             data_rows.append(row)
         except Exception as e:
@@ -99,7 +113,8 @@ async def process_batch(client, messages):
             # Batch insert
             client.insert(f"{CH_DB}.enriched_posts", data_rows, column_names=[
                 "id", "created_at", "text", "author_did", "hashtags", 
-                "category", "sentiment", "virality", "is_breaking_claim"
+                "category", "sentiment", "virality", "is_breaking_claim",
+                "geo_region", "primary_lang"
             ])
             # ACK all if insert succeeds
             for msg in messages:
