@@ -2,7 +2,7 @@
   "title": "Bluesky Live Stream Analytics",
   "uid": "bluesky_stream_01",
   "refresh": "5s",
-  "version": 13,
+  "version": 15,
   "time": {
     "from": "now-1h",
     "to": "now"
@@ -296,11 +296,11 @@
         "overrides": [
           {
             "matcher": { "id": "byName", "options": "Positive" },
-            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }]
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }]
           },
           {
             "matcher": { "id": "byName", "options": "Neutral" },
-            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#8e8e8e" } }]
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }]
           },
           {
             "matcher": { "id": "byName", "options": "Negative" },
