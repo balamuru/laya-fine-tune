@@ -17,6 +17,7 @@ class WindowMetrics:
     raw_received: int
     dropped_replies: int
     dropped_non_en: int
+    dropped_spam_nsfw: int
     passed_sieve: int
     raw_rate_per_sec: float
     passed_rate_per_sec: float
@@ -34,6 +35,7 @@ class StreamAnalytics:
         self.window_raw: int = 0
         self.window_dropped_replies: int = 0
         self.window_dropped_non_en: int = 0
+        self.window_dropped_spam_nsfw: int = 0
         self.window_passed_sieve: int = 0
         self.lang_counter: Counter[str] = Counter()
         self.last_window_start: float = time.time()
@@ -73,6 +75,10 @@ class StreamAnalytics:
         """Increment dropped non-English counter for the window."""
         self.window_dropped_non_en += 1
 
+    def record_dropped_spam_nsfw(self) -> None:
+        """Increment dropped spam/NSFW counter for the window."""
+        self.window_dropped_spam_nsfw += 1
+
     def record_passed_sieve(self) -> None:
         """Increment passed sieve counter for the window."""
         self.window_passed_sieve += 1
@@ -99,6 +105,7 @@ class StreamAnalytics:
             raw_received=self.window_raw,
             dropped_replies=self.window_dropped_replies,
             dropped_non_en=self.window_dropped_non_en,
+            dropped_spam_nsfw=self.window_dropped_spam_nsfw,
             passed_sieve=self.window_passed_sieve,
             raw_rate_per_sec=raw_rate,
             passed_rate_per_sec=passed_rate,
@@ -110,6 +117,7 @@ class StreamAnalytics:
         self.window_raw = 0
         self.window_dropped_replies = 0
         self.window_dropped_non_en = 0
+        self.window_dropped_spam_nsfw = 0
         self.window_passed_sieve = 0
         self.last_window_start = now
         return metrics

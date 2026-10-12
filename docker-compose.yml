@@ -44,6 +44,8 @@ services:
       context: .
       dockerfile: Dockerfile.ingest
     env_file: .env
+    volumes:
+    - .:/app
     depends_on:
     - nats
     - clickhouse
@@ -53,6 +55,8 @@ services:
       context: .
       dockerfile: Dockerfile.inference
     env_file: .env
+    volumes:
+    - .:/app
     depends_on:
     - nats
     - laya-serve
@@ -76,6 +80,8 @@ services:
       context: .
       dockerfile: Dockerfile.sink
     env_file: .env
+    volumes:
+    - .:/app
     depends_on:
     - nats
     - clickhouse

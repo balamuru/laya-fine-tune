@@ -81,6 +81,7 @@ async def process_batch(client, messages):
             is_breaking = float(answers.get("is_breaking_claim", {}).get("noul", answers.get("is_breaking_claim", {}).get("prob", 0.0)))
             geo_region = answers.get("geo_region", {}).get("choice", "global_none")
             primary_lang = record.get("primary_lang", "en")
+            is_nsfw = float(answers.get("is_nsfw", {}).get("noul", answers.get("is_nsfw", {}).get("prob", 0.0)))
             
             from datetime import datetime, timezone
             
@@ -102,7 +103,8 @@ async def process_batch(client, messages):
                 virality,
                 is_breaking,
                 geo_region,
-                primary_lang
+                primary_lang,
+                is_nsfw
             )
             data_rows.append(row)
         except Exception as e:
@@ -114,7 +116,7 @@ async def process_batch(client, messages):
             client.insert(f"{CH_DB}.enriched_posts", data_rows, column_names=[
                 "id", "created_at", "text", "author_did", "hashtags", 
                 "category", "sentiment", "virality", "is_breaking_claim",
-                "geo_region", "primary_lang"
+                "geo_region", "primary_lang", "is_nsfw"
             ])
             # ACK all if insert succeeds
             for msg in messages:

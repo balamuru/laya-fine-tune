@@ -25,6 +25,7 @@ SIEVE_EN_ONLY = os.getenv("SIEVE_EN_ONLY", "true").lower() == "true"
 
 import clickhouse_connect
 from datetime import datetime, timezone
+import re
 import time
 
 CH_HOST = os.getenv("CLICKHOUSE_HOST", "clickhouse")
@@ -32,6 +33,46 @@ CH_PORT = int(os.getenv("CLICKHOUSE_PORT", "8123"))
 CH_USER = os.getenv("CLICKHOUSE_USER", "default")
 CH_PASSWORD = os.getenv("CLICKHOUSE_PASSWORD", "")
 CH_DB = os.getenv("CLICKHOUSE_DATABASE", "bluesky")
+
+RE_KANA = re.compile(r'[\u3040-\u309F\u30A0-\u30FF]')
+BLOCKED_TAGS = {"#nsfw", "#dlsite", "#r18", "#porn", "#hentai", "#eromanga"}
+BLOCKED_DOMAINS = ("dlaf.jp", "dlsite.com")
+BLOCKED_LABELS = {"!warn", "porn", "sexual", "nudity", "graphic-media", "nsfw"}
+
+
+def is_obscene_or_spam(record: dict) -> bool:
+    """Deterministically check for obscene tags, affiliate domains, AT labels, or kana spoofing."""
+    text = record.get("text", "")
+    text_lower = text.lower()
+    
+    if any(domain in text_lower for domain in BLOCKED_DOMAINS):
+        return True
+
+    if RE_KANA.search(text):
+        return True
+        
+    words = text_lower.split()
+    for w in words:
+        if w in BLOCKED_TAGS:
+            return True
+
+    labels = record.get("labels")
+    if labels:
+        label_vals = set()
+        if isinstance(labels, dict):
+            for v in labels.get("values", []):
+                if isinstance(v, dict) and "val" in v:
+                    label_vals.add(str(v["val"]).lower())
+        elif isinstance(labels, list):
+            for v in labels:
+                if isinstance(v, dict) and "val" in v:
+                    label_vals.add(str(v["val"]).lower())
+                elif isinstance(v, str):
+                    label_vals.add(v.lower())
+        if label_vals.intersection(BLOCKED_LABELS):
+            return True
+
+    return False
 
 
 def setup_clickhouse():
@@ -48,6 +89,7 @@ def setup_clickhouse():
             raw_received UInt32,
             dropped_replies UInt32,
             dropped_non_en UInt32,
+            dropped_spam_nsfw UInt32,
             passed_sieve UInt32,
             raw_rate Float32,
             passed_rate Float32
@@ -55,6 +97,10 @@ def setup_clickhouse():
         ORDER BY timestamp
         """
         client.command(table_schema)
+        try:
+            client.command(f"ALTER TABLE {CH_DB}.funnel_stats ADD COLUMN IF NOT EXISTS dropped_spam_nsfw UInt32 DEFAULT 0 AFTER dropped_non_en")
+        except Exception as mig_err:
+            print(f"Migration note: {mig_err}")
         print("ClickHouse funnel_stats verified.")
         return client
     except Exception as e:
@@ -93,6 +139,7 @@ def display_metrics(metrics: WindowMetrics) -> None:
         f"Raw: {metrics.raw_received:4d} ({metrics.raw_rate_per_sec:5.1f}/s) | "
         f"Replies Drop: {metrics.dropped_replies:3d} | "
         f"Non-EN Drop: {metrics.dropped_non_en:3d} | "
+        f"Spam/NSFW Drop: {metrics.dropped_spam_nsfw:3d} | "
         f"Passed: {metrics.passed_sieve:3d} ({metrics.passed_rate_per_sec:5.1f}/s)"
     )
     if metrics.latest_text_preview:
@@ -136,6 +183,11 @@ async def run_stream(stop_event: asyncio.Event, analytics: StreamAnalytics, nc, 
                                     analytics.record_dropped_non_en()
                                     continue # Skip non-English posts
                             
+                            # Stage 2.3: Deterministic Obscenity & Spam Sieve
+                            if is_obscene_or_spam(record):
+                                analytics.record_dropped_spam_nsfw()
+                                continue # Skip obscene/spam posts
+                            
                             analytics.record_passed_sieve()
 
                             primary_lang = langs[0] if (langs and isinstance(langs, list)) else "en"
@@ -160,6 +212,7 @@ async def run_stream(stop_event: asyncio.Event, analytics: StreamAnalytics, nc, 
                                     metrics.raw_received,
                                     metrics.dropped_replies,
                                     metrics.dropped_non_en,
+                                    metrics.dropped_spam_nsfw,
                                     metrics.passed_sieve,
                                     metrics.raw_rate_per_sec,
                                     metrics.passed_rate_per_sec,
@@ -171,7 +224,7 @@ async def run_stream(stop_event: asyncio.Event, analytics: StreamAnalytics, nc, 
                                         [row],
                                         column_names=[
                                             "timestamp", "window_seconds", "raw_received", "dropped_replies",
-                                            "dropped_non_en", "passed_sieve", "raw_rate", "passed_rate"
+                                            "dropped_non_en", "dropped_spam_nsfw", "passed_sieve", "raw_rate", "passed_rate"
                                         ]
                                     )
                                 except Exception as err:

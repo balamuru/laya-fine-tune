@@ -93,6 +93,10 @@ async def process_batch(session, js, messages):
                 "oceania": "Australia, New Zealand",
                 "global_none": "general, personal, online, or no specific geographic focus"
             }
+        },
+        "is_nsfw": {
+            "type": "noul",
+            "instructions": "Does this post contain sexually explicit, obscene, or adult NSFW material?"
         }
     }
     

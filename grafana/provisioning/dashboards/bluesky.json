@@ -2,7 +2,7 @@
   "title": "Bluesky Live Stream Analytics",
   "uid": "bluesky_stream_01",
   "refresh": "5s",
-  "version": 7,
+  "version": 9,
   "time": {
     "from": "now-1h",
     "to": "now"
@@ -68,7 +68,7 @@
     },
     {
       "type": "stat",
-      "title": "Sieve Pass Rate",
+      "title": "Sieve Pass Retention Rate",
       "gridPos": {
         "h": 4,
         "w": 6,
@@ -98,7 +98,7 @@
               },
               {
                 "color": "green",
-                "value": 25
+                "value": 20
               }
             ]
           }
@@ -114,7 +114,7 @@
     },
     {
       "type": "stat",
-      "title": "Filtered: Replies Dropped",
+      "title": "Live Firehose Ingestion Speed",
       "gridPos": {
         "h": 4,
         "w": 6,
@@ -127,7 +127,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
+          "unit": "ops",
           "color": {
             "mode": "palette-classic"
           }
@@ -135,7 +135,7 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT round(100.0 * sum(dropped_replies) / nullIf(sum(raw_received), 0), 1) FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp)",
+          "rawSql": "SELECT round(avg(raw_rate), 1) FROM bluesky.funnel_stats WHERE timestamp >= now() - INTERVAL 1 MINUTE",
           "format": 0,
           "refId": "A"
         }
@@ -143,7 +143,7 @@
     },
     {
       "type": "stat",
-      "title": "Filtered: Non-English Dropped",
+      "title": "Breaking Claims Alerts",
       "gridPos": {
         "h": 4,
         "w": 6,
@@ -156,15 +156,31 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
           "color": {
-            "mode": "palette-classic"
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
           }
         }
       },
       "targets": [
         {
-          "rawSql": "SELECT round(100.0 * sum(dropped_non_en) / nullIf(sum(raw_received), 0), 1) FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp)",
+          "rawSql": "SELECT count(*) FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND is_breaking_claim >= 0.85",
           "format": 0,
           "refId": "A"
         }
@@ -172,10 +188,10 @@
     },
     {
       "type": "timeseries",
-      "title": "Live Ingestion Rate: Raw Firehose vs Passed Sieve (Events/sec)",
+      "title": "Live Stream Rate: Raw Firehose vs Passed to AI (msgs/sec)",
       "gridPos": {
         "h": 8,
-        "w": 14,
+        "w": 12,
         "x": 0,
         "y": 4
       },
@@ -183,47 +199,39 @@
         "type": "grafana-clickhouse-datasource",
         "uid": "PDEE91DDB90597936"
       },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
       "targets": [
         {
-          "rawSql": "SELECT toStartOfInterval(timestamp, INTERVAL 10 SECOND) AS time, round(avg(raw_rate), 1) AS \"Raw Firehose (Total msgs/s)\", round(avg(passed_rate), 1) AS \"Passed Sieve (Forwarded msgs/s)\" FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp) GROUP BY time ORDER BY time",
+          "rawSql": "SELECT toStartOfInterval(timestamp, INTERVAL 10 SECOND) AS time, round(avg(raw_rate), 1) AS \"Raw Firehose (Total msgs/s)\", round(avg(passed_rate), 1) AS \"Passed Sieve to AI (msgs/s)\" FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp) GROUP BY time ORDER BY time",
           "format": 1,
           "refId": "A"
         }
       ]
     },
     {
-      "type": "piechart",
-      "title": "Sieve Funnel Distribution: Pass vs Filtered Slices",
+      "type": "table",
+      "title": "Pipeline Sieve Funnel: Stage-by-Stage Retention & Drop-Off",
       "gridPos": {
         "h": 8,
-        "w": 10,
-        "x": 14,
+        "w": 12,
+        "x": 12,
         "y": 4
       },
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "PDEE91DDB90597936"
       },
-      "options": {
-        "reduceOptions": {
-          "values": true
-        },
-        "pieType": "donut",
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "values": [
-            "percent",
-            "value"
-          ]
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
       "targets": [
         {
-          "rawSql": "SELECT 'Passed Sieve (Forwarded to AI)' AS outcome, sum(passed_sieve) AS count FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp)\nUNION ALL\nSELECT 'Filtered: Replies & Threads' AS outcome, sum(dropped_replies) AS count FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp)\nUNION ALL\nSELECT 'Filtered: Non-English' AS outcome, sum(dropped_non_en) AS count FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp)",
+          "rawSql": "SELECT * FROM (SELECT '1. Raw Firehose Ingested' AS Stage, sum(raw_received) AS Volume, '100.0%' AS \"Relative Share\", 'Total raw events streamed from Bluesky WebSocket' AS \"Pipeline Meaning\" FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp) UNION ALL SELECT '2. Filtered: Replies & Threads', sum(dropped_replies), concat('-', toString(round(100.0 * sum(dropped_replies) / nullIf(sum(raw_received), 0), 1)), '%'), 'Dropped by Sieve (child replies / non-root threads)' FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp) UNION ALL SELECT '3. Filtered: Non-English', sum(dropped_non_en), concat('-', toString(round(100.0 * sum(dropped_non_en) / nullIf(sum(raw_received), 0), 1)), '%'), 'Dropped by Sieve (metadata language != en)' FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp) UNION ALL SELECT '4. Filtered: Obscene / Spam / NSFW', sum(dropped_spam_nsfw), concat('-', toString(round(100.0 * sum(dropped_spam_nsfw) / nullIf(sum(raw_received), 0), 1)), '%'), 'Dropped by Sieve (script mismatch, adult labels, spam domains)' FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp) UNION ALL SELECT '5. Passed Sieve to AI', sum(passed_sieve), concat(toString(round(100.0 * sum(passed_sieve) / nullIf(sum(raw_received), 0), 1)), '%'), 'Forwarded to Laya System One AI (100% - Replies - NonEn - Spam)' FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp) UNION ALL SELECT '6. Enriched in ClickHouse', count(*), '100% of Passed', 'Classified and indexed with sentiment, virality, geo, safety' FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) UNION ALL SELECT '7. Breaking Claims Alert', countIf(is_breaking_claim >= 0.85), concat(toString(round(100.0 * countIf(is_breaking_claim >= 0.85) / nullIf(count(*), 0), 2)), '%'), 'Escalated breaking news claims (conf >= 0.85)' FROM bluesky.enriched_posts WHERE $__timeFilter(created_at)) ORDER BY Stage ASC",
           "format": 0,
           "refId": "A"
         }
@@ -231,7 +239,7 @@
     },
     {
       "type": "barchart",
-      "title": "Top 15 Trending Hashtags",
+      "title": "Top 10 Trending Hashtags",
       "gridPos": {
         "h": 8,
         "w": 8,
@@ -241,6 +249,14 @@
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "PDEE91DDB90597936"
+      },
+      "options": {
+        "orientation": "horizontal",
+        "xField": "hashtag",
+        "showValue": "auto",
+        "legend": {
+          "displayMode": "hidden"
+        }
       },
       "fieldConfig": {
         "defaults": {
@@ -251,7 +267,7 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT arrayJoin(hashtags) AS hashtag, count(*) AS \"Post Count\" FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND hashtag != '' GROUP BY hashtag ORDER BY \"Post Count\" DESC LIMIT 15",
+          "rawSql": "SELECT arrayJoin(hashtags) AS hashtag, count(*) AS \"Post Count\" FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND hashtag != '' AND is_nsfw < 0.5 GROUP BY hashtag ORDER BY \"Post Count\" DESC LIMIT 10",
           "format": 0,
           "refId": "A"
         }
@@ -259,12 +275,26 @@
     },
     {
       "type": "barchart",
-      "title": "Sentiment Breakdown per Top Hashtags (100% Stacked)",
+      "title": "Sentiment Breakdown per Top 10 Hashtags (100% Stacked)",
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 8,
         "y": 12
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "PDEE91DDB90597936"
+      },
+      "options": {
+        "orientation": "horizontal",
+        "xField": "hashtag",
+        "stacking": "percent",
+        "showValue": "auto",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       },
       "fieldConfig": {
         "defaults": {
@@ -277,13 +307,9 @@
           }
         }
       },
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "PDEE91DDB90597936"
-      },
       "targets": [
         {
-          "rawSql": "SELECT\n  arrayJoin(hashtags) AS hashtag,\n  countIf(sentiment = 'positive') AS Positive,\n  countIf(sentiment = 'neutral') AS Neutral,\n  countIf(sentiment = 'negative') AS Negative\nFROM bluesky.enriched_posts\nWHERE $__timeFilter(created_at)\n  AND hashtag != ''\nGROUP BY hashtag\nHAVING Positive + Neutral + Negative >= 2\nORDER BY (Positive + Neutral + Negative) DESC\nLIMIT 12",
+          "rawSql": "SELECT\n  hashtag,\n  countIf(sentiment = 'positive') AS Positive,\n  countIf(sentiment = 'neutral') AS Neutral,\n  countIf(sentiment = 'negative') AS Negative\nFROM (\n  SELECT arrayJoin(hashtags) AS hashtag, sentiment\n  FROM bluesky.enriched_posts\n  WHERE $__timeFilter(created_at) AND hashtag != '' AND is_nsfw < 0.5\n    AND hashtag IN (\n      SELECT arrayJoin(hashtags) AS h\n      FROM bluesky.enriched_posts\n      WHERE $__timeFilter(created_at) AND h != '' AND is_nsfw < 0.5\n      GROUP BY h\n      ORDER BY count(*) DESC\n      LIMIT 10\n    )\n)\nGROUP BY hashtag\nORDER BY (Positive + Neutral + Negative) DESC",
           "format": 0,
           "refId": "A"
         }
@@ -304,7 +330,7 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT arrayJoin(hashtags) AS hashtag, round(avg(virality), 2) AS avg_virality, count(*) AS sample_posts FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND hashtag != '' GROUP BY hashtag HAVING sample_posts >= 2 ORDER BY avg_virality DESC, sample_posts DESC LIMIT 15",
+          "rawSql": "SELECT arrayJoin(hashtags) AS hashtag, round(avg(virality), 2) AS avg_virality, count(*) AS sample_posts FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND hashtag != '' GROUP BY hashtag HAVING sample_posts >= 2 ORDER BY avg_virality DESC, sample_posts DESC LIMIT 10",
           "format": 0,
           "refId": "A"
         }
@@ -325,7 +351,7 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT author_did, count(*) AS post_count, round(avg(virality), 2) AS avg_virality, topK(1)(category)[1] AS dominant_category FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) GROUP BY author_did HAVING ${bot_filter} ORDER BY post_count DESC LIMIT 15",
+          "rawSql": "SELECT author_did, count(*) AS post_count, round(avg(virality), 2) AS avg_virality, topK(1)(category)[1] AS dominant_category FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) GROUP BY author_did HAVING ${bot_filter} ORDER BY post_count DESC LIMIT 10",
           "format": 0,
           "refId": "A"
         }
@@ -343,6 +369,14 @@
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "PDEE91DDB90597936"
+      },
+      "options": {
+        "orientation": "horizontal",
+        "xField": "region",
+        "showValue": "auto",
+        "legend": {
+          "displayMode": "hidden"
+        }
       },
       "fieldConfig": {
         "defaults": {
@@ -423,7 +457,7 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT\n  toStartOfInterval(created_at, INTERVAL 10 SECOND) AS time,\n  countIf(category = 'tech') AS Tech,\n  countIf(category = 'politics') AS Politics,\n  countIf(category = 'entertainment') AS Entertainment,\n  countIf(category = 'finance') AS Finance,\n  countIf(category = 'lifestyle') AS Lifestyle,\n  countIf(category = 'other') AS Other\nFROM bluesky.enriched_posts\nWHERE $__timeFilter(created_at)\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  toStartOfInterval(created_at, INTERVAL 15 SECOND) AS time,\n  countIf(category = 'tech') AS Tech,\n  countIf(category = 'entertainment') AS Entertainment,\n  countIf(category = 'politics') AS Politics,\n  countIf(category = 'finance') AS Finance,\n  countIf(category = 'lifestyle') AS Lifestyle,\n  countIf(category = 'other') AS Other\nFROM bluesky.enriched_posts\nWHERE $__timeFilter(created_at)\nGROUP BY time\nORDER BY time",
           "format": 1,
           "refId": "A"
         }
