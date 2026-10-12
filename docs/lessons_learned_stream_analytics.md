@@ -76,6 +76,14 @@ This document records architectural, data engineering, and dashboard lessons lea
   GROUP BY time
   ORDER BY time
   ```
+* **Color Overrides for Stacked Bar Charts:** Rather than relying on default palette cycling, semantic metrics (like Sentiment) require explicit color overrides mapped by field name:
+  ```json
+  "overrides": [
+    { "matcher": { "id": "byName", "options": "Positive" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+    { "matcher": { "id": "byName", "options": "Neutral" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#8e8e8e" } }] },
+    { "matcher": { "id": "byName", "options": "Negative" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] }
+  ]
+  ```
 
 ---
 

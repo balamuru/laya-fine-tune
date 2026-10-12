@@ -2,13 +2,54 @@
   "title": "Bluesky Live Stream Analytics",
   "uid": "bluesky_stream_01",
   "refresh": "5s",
-  "version": 9,
+  "version": 12,
   "time": {
     "from": "now-1h",
     "to": "now"
   },
   "templating": {
     "list": [
+      {
+        "name": "region_filter",
+        "label": "Geographic Region",
+        "type": "custom",
+        "query": "All Regions : 1 = 1, North America : geo_region = 'north_america', Europe : geo_region = 'europe', Asia : geo_region = 'asia', Middle East : geo_region = 'middle_east', Latin America : geo_region = 'latin_america', Africa : geo_region = 'africa', Oceania : geo_region = 'oceania'",
+        "current": {
+          "selected": true,
+          "text": "All Regions",
+          "value": "1 = 1"
+        },
+        "options": [
+          { "selected": true, "text": "All Regions", "value": "1 = 1" },
+          { "selected": false, "text": "North America", "value": "geo_region = 'north_america'" },
+          { "selected": false, "text": "Europe", "value": "geo_region = 'europe'" },
+          { "selected": false, "text": "Asia", "value": "geo_region = 'asia'" },
+          { "selected": false, "text": "Middle East", "value": "geo_region = 'middle_east'" },
+          { "selected": false, "text": "Latin America", "value": "geo_region = 'latin_america'" },
+          { "selected": false, "text": "Africa", "value": "geo_region = 'africa'" },
+          { "selected": false, "text": "Oceania", "value": "geo_region = 'oceania'" }
+        ]
+      },
+      {
+        "name": "category_filter",
+        "label": "Topic Category",
+        "type": "custom",
+        "query": "All Categories : 1 = 1, Tech : category = 'tech', Entertainment : category = 'entertainment', Politics : category = 'politics', Finance : category = 'finance', Lifestyle : category = 'lifestyle', Other : category = 'other'",
+        "current": {
+          "selected": true,
+          "text": "All Categories",
+          "value": "1 = 1"
+        },
+        "options": [
+          { "selected": true, "text": "All Categories", "value": "1 = 1" },
+          { "selected": false, "text": "Tech", "value": "category = 'tech'" },
+          { "selected": false, "text": "Entertainment", "value": "category = 'entertainment'" },
+          { "selected": false, "text": "Politics", "value": "category = 'politics'" },
+          { "selected": false, "text": "Finance", "value": "category = 'finance'" },
+          { "selected": false, "text": "Lifestyle", "value": "category = 'lifestyle'" },
+          { "selected": false, "text": "Other", "value": "category = 'other'" }
+        ]
+      },
       {
         "name": "bot_filter",
         "label": "Account Filter",
@@ -68,7 +109,7 @@
     },
     {
       "type": "stat",
-      "title": "Sieve Pass Retention Rate",
+      "title": "End-to-End Pipeline Yield %",
       "gridPos": {
         "h": 4,
         "w": 6,
@@ -180,7 +221,7 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT count(*) FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND is_breaking_claim >= 0.85",
+          "rawSql": "SELECT count(*) FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND is_breaking_claim >= 0.85 AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter}",
           "format": 0,
           "refId": "A"
         }
@@ -188,7 +229,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Live Stream Rate: Raw Firehose vs Passed to AI (msgs/sec)",
+      "title": "Throughput Velocity: Raw Firehose vs. Sieve vs. Final Output (msgs/sec)",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -210,9 +251,14 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT toStartOfInterval(timestamp, INTERVAL 10 SECOND) AS time, round(avg(raw_rate), 1) AS \"Raw Firehose (Total msgs/s)\", round(avg(passed_rate), 1) AS \"Passed Sieve to AI (msgs/s)\" FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp) GROUP BY time ORDER BY time",
+          "rawSql": "SELECT toStartOfInterval(timestamp, INTERVAL 10 SECOND) AS time, round(avg(raw_rate), 1) AS \"1. Raw Firehose (msgs/s)\", round(avg(passed_rate), 1) AS \"2. Sieve Passed to AI (msgs/s)\" FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp) GROUP BY time ORDER BY time",
           "format": 1,
           "refId": "A"
+        },
+        {
+          "rawSql": "SELECT toStartOfInterval(created_at, INTERVAL 10 SECOND) AS time, round(count(*) / 10.0, 1) AS \"3. Final Output (Stored & Safe msgs/s)\" FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND is_nsfw < 0.5 GROUP BY time ORDER BY time",
+          "format": 1,
+          "refId": "B"
         }
       ]
     },
@@ -239,7 +285,7 @@
     },
     {
       "type": "barchart",
-      "title": "Top 10 Trending Hashtags",
+      "title": "Top 10 Trending Hashtags (Drill Down via Region/Category)",
       "gridPos": {
         "h": 8,
         "w": 8,
@@ -267,7 +313,7 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT arrayJoin(hashtags) AS hashtag, count(*) AS \"Post Count\" FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND hashtag != '' AND is_nsfw < 0.5 GROUP BY hashtag ORDER BY \"Post Count\" DESC LIMIT 10",
+          "rawSql": "SELECT arrayJoin(hashtags) AS hashtag, count(*) AS \"Post Count\" FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND hashtag != '' AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} GROUP BY hashtag ORDER BY \"Post Count\" DESC LIMIT 10",
           "format": 0,
           "refId": "A"
         }
@@ -289,7 +335,7 @@
       "options": {
         "orientation": "horizontal",
         "xField": "hashtag",
-        "stacking": "percent",
+        "stacking": "normal",
         "showValue": "auto",
         "legend": {
           "displayMode": "list",
@@ -298,18 +344,67 @@
       },
       "fieldConfig": {
         "defaults": {
+          "unit": "percent",
+          "max": 100,
           "custom": {
             "orientation": "horizontal",
             "stacking": {
               "group": "A",
-              "mode": "percent"
+              "mode": "normal"
             }
           }
-        }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Positive"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Neutral"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8e8e8e"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Negative"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
       },
       "targets": [
         {
-          "rawSql": "SELECT\n  hashtag,\n  countIf(sentiment = 'positive') AS Positive,\n  countIf(sentiment = 'neutral') AS Neutral,\n  countIf(sentiment = 'negative') AS Negative\nFROM (\n  SELECT arrayJoin(hashtags) AS hashtag, sentiment\n  FROM bluesky.enriched_posts\n  WHERE $__timeFilter(created_at) AND hashtag != '' AND is_nsfw < 0.5\n    AND hashtag IN (\n      SELECT arrayJoin(hashtags) AS h\n      FROM bluesky.enriched_posts\n      WHERE $__timeFilter(created_at) AND h != '' AND is_nsfw < 0.5\n      GROUP BY h\n      ORDER BY count(*) DESC\n      LIMIT 10\n    )\n)\nGROUP BY hashtag\nORDER BY (Positive + Neutral + Negative) DESC",
+          "rawSql": "SELECT\n  hashtag,\n  round(100.0 * countIf(sentiment = 'positive') / nullIf(count(*), 0), 1) AS Positive,\n  round(100.0 * countIf(sentiment = 'neutral') / nullIf(count(*), 0), 1) AS Neutral,\n  round(100.0 * countIf(sentiment = 'negative') / nullIf(count(*), 0), 1) AS Negative\nFROM (\n  SELECT arrayJoin(hashtags) AS hashtag, sentiment\n  FROM bluesky.enriched_posts\n  WHERE $__timeFilter(created_at) AND hashtag != '' AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter}\n    AND hashtag IN (\n      SELECT arrayJoin(hashtags) AS h\n      FROM bluesky.enriched_posts\n      WHERE $__timeFilter(created_at) AND h != '' AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter}\n      GROUP BY h\n      ORDER BY count(*) DESC\n      LIMIT 10\n    )\n)\nGROUP BY hashtag\nORDER BY (countIf(sentiment = 'positive') + countIf(sentiment = 'neutral') + countIf(sentiment = 'negative')) DESC",
           "format": 0,
           "refId": "A"
         }
@@ -330,7 +425,7 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT arrayJoin(hashtags) AS hashtag, round(avg(virality), 2) AS avg_virality, count(*) AS sample_posts FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND hashtag != '' GROUP BY hashtag HAVING sample_posts >= 2 ORDER BY avg_virality DESC, sample_posts DESC LIMIT 10",
+          "rawSql": "SELECT arrayJoin(hashtags) AS hashtag, round(avg(virality), 2) AS avg_virality, count(*) AS sample_posts FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND hashtag != '' AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} GROUP BY hashtag HAVING sample_posts >= 2 ORDER BY avg_virality DESC, sample_posts DESC LIMIT 10",
           "format": 0,
           "refId": "A"
         }
@@ -351,7 +446,7 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT author_did, count(*) AS post_count, round(avg(virality), 2) AS avg_virality, topK(1)(category)[1] AS dominant_category FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) GROUP BY author_did HAVING ${bot_filter} ORDER BY post_count DESC LIMIT 10",
+          "rawSql": "SELECT author_did, count(*) AS post_count, round(avg(virality), 2) AS avg_virality, topK(1)(category)[1] AS dominant_category FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} GROUP BY author_did HAVING ${bot_filter} ORDER BY post_count DESC LIMIT 10",
           "format": 0,
           "refId": "A"
         }
@@ -387,7 +482,7 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT geo_region AS region, count(*) AS \"Mention Count\" FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND geo_region != 'global_none' GROUP BY region ORDER BY \"Mention Count\" DESC LIMIT 10",
+          "rawSql": "SELECT geo_region AS region, count(*) AS \"Mention Count\" FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND geo_region != 'global_none' AND is_nsfw < 0.5 GROUP BY region ORDER BY \"Mention Count\" DESC LIMIT 10",
           "format": 0,
           "refId": "A"
         }
@@ -425,7 +520,7 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT category, count(*) AS count FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND category != 'unknown' GROUP BY category ORDER BY count DESC",
+          "rawSql": "SELECT category, count(*) AS count FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND category != 'unknown' AND is_nsfw < 0.5 AND ${region_filter} GROUP BY category ORDER BY count DESC",
           "format": 0,
           "refId": "A"
         }
@@ -457,7 +552,7 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT\n  toStartOfInterval(created_at, INTERVAL 15 SECOND) AS time,\n  countIf(category = 'tech') AS Tech,\n  countIf(category = 'entertainment') AS Entertainment,\n  countIf(category = 'politics') AS Politics,\n  countIf(category = 'finance') AS Finance,\n  countIf(category = 'lifestyle') AS Lifestyle,\n  countIf(category = 'other') AS Other\nFROM bluesky.enriched_posts\nWHERE $__timeFilter(created_at)\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  toStartOfInterval(created_at, INTERVAL 15 SECOND) AS time,\n  countIf(category = 'tech') AS Tech,\n  countIf(category = 'entertainment') AS Entertainment,\n  countIf(category = 'politics') AS Politics,\n  countIf(category = 'finance') AS Finance,\n  countIf(category = 'lifestyle') AS Lifestyle,\n  countIf(category = 'other') AS Other\nFROM bluesky.enriched_posts\nWHERE $__timeFilter(created_at) AND is_nsfw < 0.5 AND ${region_filter}\nGROUP BY time\nORDER BY time",
           "format": 1,
           "refId": "A"
         }
@@ -478,7 +573,7 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT toString(created_at) AS timestamp, category, geo_region, round(is_breaking_claim, 2) AS breaking_conf, round(virality, 2) AS virality, text FROM bluesky.enriched_posts WHERE is_breaking_claim >= 0.85 ORDER BY created_at DESC LIMIT 25",
+          "rawSql": "SELECT toString(created_at) AS timestamp, category, geo_region, round(is_breaking_claim, 2) AS breaking_conf, round(virality, 2) AS virality, text FROM bluesky.enriched_posts WHERE is_breaking_claim >= 0.85 AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} ORDER BY created_at DESC LIMIT 25",
           "format": 0,
           "refId": "A"
         }
