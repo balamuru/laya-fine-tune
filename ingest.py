@@ -101,7 +101,18 @@ def setup_clickhouse():
             client.command(f"ALTER TABLE {CH_DB}.funnel_stats ADD COLUMN IF NOT EXISTS dropped_spam_nsfw UInt32 DEFAULT 0 AFTER dropped_non_en")
         except Exception as mig_err:
             print(f"Migration note: {mig_err}")
-        print("ClickHouse funnel_stats verified.")
+            
+        client.command(f"""
+        CREATE TABLE IF NOT EXISTS {CH_DB}.queue_stats (
+            timestamp DateTime,
+            consumer LowCardinality(String),
+            backlog UInt32,
+            in_flight UInt32,
+            redelivered UInt32
+        ) ENGINE = MergeTree()
+        ORDER BY (timestamp, consumer)
+        """)
+        print("ClickHouse funnel_stats & queue_stats verified.")
         return client
     except Exception as e:
         print(f"Warning: Could not connect to ClickHouse for funnel stats: {e}")
@@ -229,6 +240,23 @@ async def run_stream(stop_event: asyncio.Event, analytics: StreamAnalytics, nc, 
                                     )
                                 except Exception as err:
                                     print(f"Error logging funnel stats to ClickHouse: {err}")
+                                    
+                                try:
+                                    consumers = await js.consumers_info("stream")
+                                    now_ts = datetime.now(timezone.utc)
+                                    q_rows = [
+                                        (now_ts, c.name, int(c.num_pending), int(c.num_ack_pending), int(c.num_redelivered))
+                                        for c in consumers
+                                    ]
+                                    if q_rows:
+                                        await asyncio.to_thread(
+                                            ch_client.insert,
+                                            f"{CH_DB}.queue_stats",
+                                            q_rows,
+                                            column_names=["timestamp", "consumer", "backlog", "in_flight", "redelivered"]
+                                        )
+                                except Exception as q_err:
+                                    print(f"Error logging queue stats to ClickHouse: {q_err}")
                             
                     except asyncio.TimeoutError:
                         continue

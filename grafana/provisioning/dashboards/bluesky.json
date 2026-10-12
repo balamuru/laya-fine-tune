@@ -2,7 +2,7 @@
   "title": "Bluesky Live Stream Analytics",
   "uid": "bluesky_stream_01",
   "refresh": "5s",
-  "version": 12,
+  "version": 13,
   "time": {
     "from": "now-1h",
     "to": "now"
@@ -61,26 +61,10 @@
           "value": "1 = 1"
         },
         "options": [
-          {
-            "selected": true,
-            "text": "All Accounts",
-            "value": "1 = 1"
-          },
-          {
-            "selected": false,
-            "text": "Exclude High-Freq Bots (<= 15 posts/hr)",
-            "value": "post_count <= 15"
-          },
-          {
-            "selected": false,
-            "text": "Exclude Bots (<= 5 posts/hr)",
-            "value": "post_count <= 5"
-          },
-          {
-            "selected": false,
-            "text": "Bots Only (> 15 posts/hr)",
-            "value": "post_count > 15"
-          }
+          { "selected": true, "text": "All Accounts", "value": "1 = 1" },
+          { "selected": false, "text": "Exclude High-Freq Bots (<= 15 posts/hr)", "value": "post_count <= 15" },
+          { "selected": false, "text": "Exclude Bots (<= 5 posts/hr)", "value": "post_count <= 5" },
+          { "selected": false, "text": "Bots Only (> 15 posts/hr)", "value": "post_count > 15" }
         ]
       }
     ]
@@ -89,16 +73,8 @@
     {
       "type": "stat",
       "title": "Raw Firehose Total (Window)",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 0,
-        "y": 0
-      },
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "PDEE91DDB90597936"
-      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
       "targets": [
         {
           "rawSql": "SELECT sum(raw_received) FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp)",
@@ -110,37 +86,18 @@
     {
       "type": "stat",
       "title": "End-to-End Pipeline Yield %",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 6,
-        "y": 0
-      },
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "PDEE91DDB90597936"
-      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
-          "color": {
-            "mode": "thresholds"
-          },
+          "color": { "mode": "thresholds" },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 15
-              },
-              {
-                "color": "green",
-                "value": 20
-              }
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 15 },
+              { "color": "green", "value": 20 }
             ]
           }
         }
@@ -156,22 +113,12 @@
     {
       "type": "stat",
       "title": "Live Firehose Ingestion Speed",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 12,
-        "y": 0
-      },
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "PDEE91DDB90597936"
-      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
       "fieldConfig": {
         "defaults": {
           "unit": "ops",
-          "color": {
-            "mode": "palette-classic"
-          }
+          "color": { "mode": "palette-classic" }
         }
       },
       "targets": [
@@ -185,36 +132,17 @@
     {
       "type": "stat",
       "title": "Breaking Claims Alerts",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 18,
-        "y": 0
-      },
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "PDEE91DDB90597936"
-      },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
+          "color": { "mode": "thresholds" },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "color": "blue",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 1
-              },
-              {
-                "color": "red",
-                "value": 20
-              }
+              { "color": "blue", "value": null },
+              { "color": "orange", "value": 1 },
+              { "color": "red", "value": 20 }
             ]
           }
         }
@@ -230,24 +158,11 @@
     {
       "type": "timeseries",
       "title": "Throughput Velocity: Raw Firehose vs. Sieve vs. Final Output (msgs/sec)",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 4
-      },
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "PDEE91DDB90597936"
-      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
       "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
       },
       "targets": [
         {
@@ -265,16 +180,8 @@
     {
       "type": "table",
       "title": "Pipeline Sieve Funnel: Stage-by-Stage Retention & Drop-Off",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 4
-      },
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "PDEE91DDB90597936"
-      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
       "targets": [
         {
           "rawSql": "SELECT * FROM (SELECT '1. Raw Firehose Ingested' AS Stage, sum(raw_received) AS Volume, '100.0%' AS \"Relative Share\", 'Total raw events streamed from Bluesky WebSocket' AS \"Pipeline Meaning\" FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp) UNION ALL SELECT '2. Filtered: Replies & Threads', sum(dropped_replies), concat('-', toString(round(100.0 * sum(dropped_replies) / nullIf(sum(raw_received), 0), 1)), '%'), 'Dropped by Sieve (child replies / non-root threads)' FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp) UNION ALL SELECT '3. Filtered: Non-English', sum(dropped_non_en), concat('-', toString(round(100.0 * sum(dropped_non_en) / nullIf(sum(raw_received), 0), 1)), '%'), 'Dropped by Sieve (metadata language != en)' FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp) UNION ALL SELECT '4. Filtered: Obscene / Spam / NSFW', sum(dropped_spam_nsfw), concat('-', toString(round(100.0 * sum(dropped_spam_nsfw) / nullIf(sum(raw_received), 0), 1)), '%'), 'Dropped by Sieve (script mismatch, adult labels, spam domains)' FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp) UNION ALL SELECT '5. Passed Sieve to AI', sum(passed_sieve), concat(toString(round(100.0 * sum(passed_sieve) / nullIf(sum(raw_received), 0), 1)), '%'), 'Forwarded to Laya System One AI (100% - Replies - NonEn - Spam)' FROM bluesky.funnel_stats WHERE $__timeFilter(timestamp) UNION ALL SELECT '6. Enriched in ClickHouse', count(*), '100% of Passed', 'Classified and indexed with sentiment, virality, geo, safety' FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) UNION ALL SELECT '7. Breaking Claims Alert', countIf(is_breaking_claim >= 0.85), concat(toString(round(100.0 * countIf(is_breaking_claim >= 0.85) / nullIf(count(*), 0), 2)), '%'), 'Escalated breaking news claims (conf >= 0.85)' FROM bluesky.enriched_posts WHERE $__timeFilter(created_at)) ORDER BY Stage ASC",
@@ -284,31 +191,77 @@
       ]
     },
     {
+      "type": "table",
+      "title": "NATS Worker Queue Status & Health",
+      "gridPos": { "h": 7, "w": 10, "x": 0, "y": 12 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
+      "fieldConfig": {
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Queue Health" },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": { "type": "color-background", "mode": "basic" }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT consumer AS \"Worker / Consumer\", argMax(backlog, timestamp) AS \"Backlog (Waiting)\", argMax(in_flight, timestamp) AS \"In-Flight (Processing)\", argMax(redelivered, timestamp) AS \"Redeliveries\", multiIf(argMax(redelivered, timestamp) > 50, 'STALLED / ERROR', argMax(backlog, timestamp) > 500, 'OVERWORKED', argMax(backlog, timestamp) > 50, 'MODERATE', 'HEALTHY') AS \"Queue Health\" FROM bluesky.queue_stats WHERE timestamp >= now() - INTERVAL 5 MINUTE GROUP BY consumer ORDER BY \"Backlog (Waiting)\" DESC",
+          "format": 0,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker Backlog & Processing Lag Over Time (Messages Waiting)",
+      "gridPos": { "h": 7, "w": 14, "x": 10, "y": 12 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT toStartOfInterval(timestamp, INTERVAL 10 SECOND) AS time, maxIf(backlog, consumer = 'inference_worker') AS \"Inference Worker (AI GPU Queue)\", maxIf(backlog, consumer = 'sink_worker') AS \"Sink Worker (ClickHouse Batch Queue)\", maxIf(backlog, consumer = 'escalation_worker') AS \"Escalation Worker Queue\" FROM bluesky.queue_stats WHERE $__timeFilter(timestamp) GROUP BY time ORDER BY time",
+          "format": 1,
+          "refId": "A"
+        }
+      ]
+    },
+    {
       "type": "barchart",
       "title": "Top 10 Trending Hashtags (Drill Down via Region/Category)",
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 12
-      },
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "PDEE91DDB90597936"
-      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 19 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
       "options": {
         "orientation": "horizontal",
         "xField": "hashtag",
         "showValue": "auto",
-        "legend": {
-          "displayMode": "hidden"
-        }
+        "legend": { "displayMode": "hidden" }
       },
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "orientation": "horizontal"
-          }
+          "custom": { "orientation": "horizontal" }
         }
       },
       "targets": [
@@ -322,25 +275,14 @@
     {
       "type": "barchart",
       "title": "Sentiment Breakdown per Top 10 Hashtags (100% Stacked)",
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 12
-      },
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "PDEE91DDB90597936"
-      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 19 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
       "options": {
         "orientation": "horizontal",
         "xField": "hashtag",
         "stacking": "normal",
         "showValue": "auto",
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        }
+        "legend": { "displayMode": "list", "placement": "bottom" }
       },
       "fieldConfig": {
         "defaults": {
@@ -348,57 +290,21 @@
           "max": 100,
           "custom": {
             "orientation": "horizontal",
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            }
+            "stacking": { "group": "A", "mode": "normal" }
           }
         },
         "overrides": [
           {
-            "matcher": {
-              "id": "byName",
-              "options": "Positive"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
+            "matcher": { "id": "byName", "options": "Positive" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }]
           },
           {
-            "matcher": {
-              "id": "byName",
-              "options": "Neutral"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#8e8e8e"
-                }
-              }
-            ]
+            "matcher": { "id": "byName", "options": "Neutral" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#8e8e8e" } }]
           },
           {
-            "matcher": {
-              "id": "byName",
-              "options": "Negative"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
+            "matcher": { "id": "byName", "options": "Negative" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }]
           }
         ]
       },
@@ -413,16 +319,8 @@
     {
       "type": "table",
       "title": "Viral Hashtags (Top Virality Score)",
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 12
-      },
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "PDEE91DDB90597936"
-      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 19 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
       "targets": [
         {
           "rawSql": "SELECT arrayJoin(hashtags) AS hashtag, round(avg(virality), 2) AS avg_virality, count(*) AS sample_posts FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND hashtag != '' AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} GROUP BY hashtag HAVING sample_posts >= 2 ORDER BY avg_virality DESC, sample_posts DESC LIMIT 10",
@@ -434,16 +332,8 @@
     {
       "type": "table",
       "title": "Most Active Posters (Controlled by Account Filter Toggle)",
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 20
-      },
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "PDEE91DDB90597936"
-      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 27 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
       "targets": [
         {
           "rawSql": "SELECT author_did, count(*) AS post_count, round(avg(virality), 2) AS avg_virality, topK(1)(category)[1] AS dominant_category FROM bluesky.enriched_posts WHERE $__timeFilter(created_at) AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} GROUP BY author_did HAVING ${bot_filter} ORDER BY post_count DESC LIMIT 10",
@@ -455,29 +345,17 @@
     {
       "type": "barchart",
       "title": "Geographic / Regional Mentions",
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 20
-      },
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "PDEE91DDB90597936"
-      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 27 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
       "options": {
         "orientation": "horizontal",
         "xField": "region",
         "showValue": "auto",
-        "legend": {
-          "displayMode": "hidden"
-        }
+        "legend": { "displayMode": "hidden" }
       },
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "orientation": "horizontal"
-          }
+          "custom": { "orientation": "horizontal" }
         }
       },
       "targets": [
@@ -491,32 +369,13 @@
     {
       "type": "piechart",
       "title": "Category Share of Voice",
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 20
-      },
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "PDEE91DDB90597936"
-      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 27 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
       "options": {
-        "reduceOptions": {
-          "values": true
-        },
+        "reduceOptions": { "values": true },
         "pieType": "donut",
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "values": [
-            "percent",
-            "value"
-          ]
-        },
-        "tooltip": {
-          "mode": "single"
-        }
+        "legend": { "displayMode": "table", "placement": "right", "values": ["percent", "value"] },
+        "tooltip": { "mode": "single" }
       },
       "targets": [
         {
@@ -529,26 +388,11 @@
     {
       "type": "timeseries",
       "title": "Posts by Category (Live Curves by Category)",
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 28
-      },
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "PDEE91DDB90597936"
-      },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 35 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
       "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "targets": [
         {
@@ -561,16 +405,8 @@
     {
       "type": "table",
       "title": "Live Breaking Claims Radar (is_breaking_claim >= 0.85)",
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 28
-      },
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "PDEE91DDB90597936"
-      },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 35 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "PDEE91DDB90597936" },
       "targets": [
         {
           "rawSql": "SELECT toString(created_at) AS timestamp, category, geo_region, round(is_breaking_claim, 2) AS breaking_conf, round(virality, 2) AS virality, text FROM bluesky.enriched_posts WHERE is_breaking_claim >= 0.85 AND is_nsfw < 0.5 AND ${region_filter} AND ${category_filter} ORDER BY created_at DESC LIMIT 25",

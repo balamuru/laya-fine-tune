@@ -92,3 +92,20 @@ This document records architectural, data engineering, and dashboard lessons lea
 * **Lesson & Fix:** A pipeline funnel must reflect exact sequential attribution where each stage is traceable:
   $$\text{Raw Firehose Ingested (100\%)} = \text{Replies Drop} + \text{Non-EN Drop} + \text{Spam/NSFW Drop} + \text{Passed Sieve}$$
   Representing this as an ordered, stage-by-stage audit table showing `Stage`, `Volume`, `Relative Share`, and `Pipeline Meaning` eliminates all ambiguity for operators.
+
+---
+
+## 7. Pipeline Worker Telemetry & Consumer Lag Monitoring
+* **Challenge:** Monitoring whether individual downstream stages (Laya AI GPU micro-batches vs. ClickHouse batch inserts vs. alert escalation) are keeping up with stream velocity or silently accumulating consumer lag.
+* **Architecture:** Rather than running separate heavy monitoring daemons, the ingestion worker periodically samples JetStream consumer metadata (`js.consumers_info("stream")`) and writes micro-rows to ClickHouse table `bluesky.queue_stats` every 3 seconds:
+  * `backlog` (`num_pending`): Unprocessed messages waiting in queue.
+  * `in_flight` (`num_ack_pending`): Messages currently being evaluated by workers.
+  * `redelivered` (`num_redelivered`): Failed or timed-out deliveries.
+* **Dashboard Representation:**
+  1. **Live Queue Health Table:** Dynamic health categorization:
+     * `HEALTHY` (backlog <= 50, redeliveries = 0)
+     * `MODERATE` (50 < backlog <= 500)
+     * `OVERWORKED` (backlog > 500)
+     * `STALLED / ERROR` (redeliveries > 50)
+  2. **Consumer Backlog Over Time (TimeSeries):** Direct multi-series visibility into queue growth, enabling instant detection of GPU or database bottlenecks during firehose spikes.
+
