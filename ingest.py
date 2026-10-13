@@ -76,48 +76,52 @@ def is_obscene_or_spam(record: dict) -> bool:
     return False
 
 
-def setup_clickhouse():
+def setup_clickhouse(max_retries: int = 5, retry_delay: float = 2.0):
     """Connect to ClickHouse and ensure funnel_stats table exists."""
-    try:
-        client = clickhouse_connect.get_client(
-            host=CH_HOST, port=CH_PORT, username=CH_USER, password=CH_PASSWORD
-        )
-        client.command(f"CREATE DATABASE IF NOT EXISTS {CH_DB}")
-        table_schema = f"""
-        CREATE TABLE IF NOT EXISTS {CH_DB}.funnel_stats (
-            timestamp DateTime,
-            window_seconds Float32,
-            raw_received UInt32,
-            dropped_replies UInt32,
-            dropped_non_en UInt32,
-            dropped_spam_nsfw UInt32,
-            passed_sieve UInt32,
-            raw_rate Float32,
-            passed_rate Float32
-        ) ENGINE = MergeTree()
-        ORDER BY timestamp
-        """
-        client.command(table_schema)
+    for attempt in range(1, max_retries + 1):
         try:
-            client.command(f"ALTER TABLE {CH_DB}.funnel_stats ADD COLUMN IF NOT EXISTS dropped_spam_nsfw UInt32 DEFAULT 0 AFTER dropped_non_en")
-        except Exception as mig_err:
-            print(f"Migration note: {mig_err}")
-            
-        client.command(f"""
-        CREATE TABLE IF NOT EXISTS {CH_DB}.queue_stats (
-            timestamp DateTime,
-            consumer LowCardinality(String),
-            backlog UInt32,
-            in_flight UInt32,
-            redelivered UInt32
-        ) ENGINE = MergeTree()
-        ORDER BY (timestamp, consumer)
-        """)
-        print("ClickHouse funnel_stats & queue_stats verified.")
-        return client
-    except Exception as e:
-        print(f"Warning: Could not connect to ClickHouse for funnel stats: {e}")
-        return None
+            client = clickhouse_connect.get_client(
+                host=CH_HOST, port=CH_PORT, username=CH_USER, password=CH_PASSWORD
+            )
+            client.command(f"CREATE DATABASE IF NOT EXISTS {CH_DB}")
+            table_schema = f"""
+            CREATE TABLE IF NOT EXISTS {CH_DB}.funnel_stats (
+                timestamp DateTime,
+                window_seconds Float32,
+                raw_received UInt32,
+                dropped_replies UInt32,
+                dropped_non_en UInt32,
+                dropped_spam_nsfw UInt32,
+                passed_sieve UInt32,
+                raw_rate Float32,
+                passed_rate Float32
+            ) ENGINE = MergeTree()
+            ORDER BY timestamp
+            """
+            client.command(table_schema)
+            try:
+                client.command(f"ALTER TABLE {CH_DB}.funnel_stats ADD COLUMN IF NOT EXISTS dropped_spam_nsfw UInt32 DEFAULT 0 AFTER dropped_non_en")
+            except Exception as mig_err:
+                print(f"Migration note: {mig_err}")
+                
+            client.command(f"""
+            CREATE TABLE IF NOT EXISTS {CH_DB}.queue_stats (
+                timestamp DateTime,
+                consumer LowCardinality(String),
+                backlog UInt32,
+                in_flight UInt32,
+                redelivered UInt32
+            ) ENGINE = MergeTree()
+            ORDER BY (timestamp, consumer)
+            """)
+            print("ClickHouse funnel_stats & queue_stats verified.")
+            return client
+        except Exception as e:
+            if attempt < max_retries:
+                time.sleep(retry_delay)
+            else:
+                print(f"Warning: Could not connect to ClickHouse for funnel stats: {e}")
+                return None
 
 
 def is_root_post(record: dict) -> bool:
@@ -219,6 +223,8 @@ async def run_stream(stop_event: asyncio.Event, analytics: StreamAnalytics, nc, 
                         metrics = analytics.check_window()
                         if metrics:
                             display_metrics(metrics)
+                            if not ch_client:
+                                ch_client = setup_clickhouse(max_retries=1, retry_delay=0.0)
                             if ch_client:
                                 row = [
                                     datetime.now(timezone.utc),

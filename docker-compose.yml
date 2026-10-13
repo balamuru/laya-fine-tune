@@ -72,6 +72,8 @@ services:
       CLICKHOUSE_DB: ${CLICKHOUSE_DATABASE:-bluesky}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
+    volumes:
+    - clickhouse_data:/var/lib/clickhouse
     restart: unless-stopped
     ulimits:
       nofile:
@@ -125,3 +127,4 @@ volumes:
   model-cache:
     name: laya_finetune_cache
   grafana_data: null
+  clickhouse_data: null
