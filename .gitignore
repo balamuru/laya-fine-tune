@@ -59,3 +59,13 @@ coverage.xml
 # Linter caches
 .ruff_cache/
 .mypy_cache/
+
+# Fine-tuning data & model checkpoints (keeps workspace uncluttered & untracked)
+data/
+checkpoints/
+*.pt
+*.bin
+
+# Local Docker compose overrides
+docker-compose.override.yml
+docker-compose.override.yaml

@@ -28,6 +28,8 @@ services:
       HF_TOKEN: ${HF_TOKEN:-}
     volumes:
     - model-cache:/home/laya/.cache/huggingface
+    - ./checkpoints:/checkpoints
+    - ./data:/data
     deploy:
       resources:
         reservations:
